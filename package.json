@@ -1,0 +1,86 @@
+{
+  "name": "deep-diff-links",
+  "displayName": "Deep Diff Links",
+  "description": "Deep-linkable code review viewer: turn Markdown review comments into clickable Git diffs, from any branch, without touching your working tree.",
+  "publisher": "oliviercado",
+  "version": "0.4.0",
+  "private": true,
+  "license": "MIT",
+  "author": {
+    "name": "Olivier Cado"
+  },
+  "icon": "images/icon.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Gwened/deep-diff-links.git"
+  },
+  "homepage": "https://github.com/Gwened/deep-diff-links#readme",
+  "bugs": {
+    "url": "https://github.com/Gwened/deep-diff-links/issues"
+  },
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "SCM Providers",
+    "Other"
+  ],
+  "main": "./dist/extension.js",
+  "activationEvents": [
+    "onUri",
+    "onLanguage:markdown"
+  ],
+  "extensionDependencies": [
+    "vscode.git"
+  ],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": false,
+      "description": "Deep diff links run git in the workspace repository, which is only done in trusted workspaces."
+    },
+    "virtualWorkspaces": false
+  },
+  "contributes": {
+    "configuration": {
+      "title": "Deep Diff Links",
+      "properties": {
+        "deepDiffLinks.maxFileBytes": {
+          "type": "integer",
+          "default": 10485760,
+          "minimum": 1,
+          "maximum": 104857600,
+          "description": "Files larger than this many bytes (at either commit) show a notice instead of a diff."
+        }
+      }
+    },
+    "markdown.markdownItPlugins": true
+  },
+  "scripts": {
+    "compile": "node esbuild.mjs",
+    "watch": "node esbuild.mjs --watch",
+    "typecheck": "tsc --noEmit -p .",
+    "build:tests": "tsc -p tsconfig.test.json",
+    "test:unit": "npm run build:tests && mocha \"out/test/unit/**/*.test.js\"",
+    "test:integration": "npm run compile && npm run build:tests && node out/test/integration/runTest.js",
+    "test": "npm run test:unit && npm run test:integration",
+    "package": "vsce package --no-dependencies",
+    "vscode:prepublish": "npm run compile -- --production"
+  },
+  "devDependencies": {
+    "@types/mocha": "^10.0.6",
+    "@types/node": "^20.11.0",
+    "@types/vscode": "~1.85.0",
+    "@vscode/test-electron": "^3.1.0",
+    "@vscode/vsce": "^2.24.0",
+    "esbuild": "^0.20.0",
+    "mocha": "^10.3.0",
+    "typescript": "^5.3.3"
+  },
+  "keywords": [
+    "code review",
+    "diff",
+    "git",
+    "markdown",
+    "deep link"
+  ]
+}

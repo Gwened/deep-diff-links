@@ -1,0 +1,12 @@
+# Allow-list: exclude everything, then ship only what the installed extension needs.
+# Sources, tests, build output for tests (out/), source maps, the spec, CI config,
+# node_modules (the bundle has no runtime dependencies) and test downloads stay out.
+**
+
+!dist/extension.js
+!package.json
+!README.md
+!CHANGELOG.md
+!LICENSE
+!AUTHORS
+!images/icon.png
