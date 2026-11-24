@@ -1,0 +1,10 @@
+# Open VSX package. GitHub README.md and the Marketplace listing files stay out.
+**
+
+!dist/extension.js
+!package.json
+!docs/readme-open-vsx.md
+!CHANGELOG.md
+!LICENSE
+!AUTHORS
+!images/icon.png

@@ -2,6 +2,11 @@
 
 All notable changes to Deep Diff Links are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow [Semantic Versioning](https://semver.org/).
 
+## [0.4.1] - 2026-11-24
+
+### Changed
+- Visual Studio Marketplace and Open VSX packages now ship store-specific README and changelog files. The GitHub README is no longer packed into either VSIX.
+
 ## [0.4.0] - 2026-11-22
 
 ### Changed
@@ -47,6 +52,7 @@ All notable changes to Deep Diff Links are listed here. The format follows [Keep
 - Clear error messages for a missing commit, a missing path, an unknown or ambiguous workspace folder, git failures, and a disabled Git extension.
 - Placeholder text for binary files, submodules and directories, and a size limit (`maxFileBytes`).
 
+[0.4.1]: https://github.com/Gwened/deep-diff-links/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/Gwened/deep-diff-links/compare/v0.3.1...v0.4.0
 [0.3.1]: https://github.com/Gwened/deep-diff-links/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/Gwened/deep-diff-links/compare/v0.2.1...v0.3.0

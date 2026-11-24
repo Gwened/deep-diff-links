@@ -71,9 +71,13 @@ If a commit isn't in your clone, run `git fetch` and click again. The extension 
 
 ```sh
 npm ci
-npm run package            # produces deep-diff-links-<version>.vsix
-code --install-extension deep-diff-links-0.4.0.vsix     # or: cursor --install-extension …
+npm run package:vscode        # deep-diff-links-<version>-vscode.vsix    (Visual Studio Marketplace)
+npm run package:openvsx       # deep-diff-links-<version>-openvsx.vsix   (Open VSX)
+code --install-extension deep-diff-links-0.4.1-vscode.vsix
+cursor --install-extension deep-diff-links-0.4.1-openvsx.vsix
 ```
+
+Store listings are `docs/readme-vscode-marketplace.md` and `docs/readme-open-vsx.md`. This GitHub README is not packed into either VSIX.
 
 You need the built-in Git extension enabled, and a trusted workspace.
 

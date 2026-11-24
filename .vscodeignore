@@ -1,12 +1,11 @@
-# Allow-list: exclude everything, then ship only what the installed extension needs.
-# Sources, tests, build output for tests (out/), source maps, the spec, CI config,
-# node_modules (the bundle has no runtime dependencies) and test downloads stay out.
+# Visual Studio Marketplace package. GitHub README.md stays out of the VSIX.
+# Open VSX uses .vscodeignore.openvsx.
 **
 
 !dist/extension.js
 !package.json
-!README.md
-!CHANGELOG.md
+!docs/readme-vscode-marketplace.md
+!docs/changelog-vscode-marketplace.md
 !LICENSE
 !AUTHORS
 !images/icon.png
