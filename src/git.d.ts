@@ -3,8 +3,13 @@ import { Event, Uri } from 'vscode';
 
 export type APIState = 'uninitialized' | 'initialized';
 
+export interface RepositoryState {
+  readonly onDidChange: Event<void>;
+}
+
 export interface Repository {
   readonly rootUri: Uri;
+  readonly state: RepositoryState;
 }
 
 export interface API {

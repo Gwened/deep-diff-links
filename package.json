@@ -3,7 +3,7 @@
   "displayName": "Deep Diff Links",
   "description": "Deep-linkable code review viewer: turn Markdown review comments into clickable Git diffs, from any branch, without touching your working tree.",
   "publisher": "oliviercado",
-  "version": "0.4.1",
+  "version": "0.5.0",
   "private": true,
   "license": "MIT",
   "author": {
@@ -49,7 +49,7 @@
           "default": 10485760,
           "minimum": 1,
           "maximum": 104857600,
-          "description": "Files larger than this many bytes (at either commit) show a notice instead of a diff."
+          "description": "Files larger than this many bytes (on either side) show a notice instead of a diff."
         }
       }
     },

@@ -53,6 +53,12 @@ function write(root: string, rel: string, content: string | Buffer) {
   fs.writeFileSync(file, content);
 }
 
+export const STASHED_BLOCKS = 'stashed blocks.ts content\n';
+export const STAGED_ADDED = 'staged added\n';
+export const WORKTREE_ADDED = 'unstaged added\n';
+export const STASH_UNTRACKED = 'from stash -u\n';
+export const DIRTY_HOOKS = 'dirty working tree\n';
+
 export function createFixtureRepo(root: string): Fixture {
   fs.mkdirSync(root, { recursive: true });
   git(root, 'init', '-q');
@@ -74,6 +80,18 @@ export function createFixtureRepo(root: string): Fixture {
   git(root, 'commit', '-q', '-m', 'C2');
   const c2 = git(root, 'rev-parse', 'HEAD');
   return { root, c1, c2 };
+}
+
+/** Dirty worktree, staged `added.txt`, and `stash@{0}` with a WIP file plus `stash -u` untracked. */
+export function applyLiveWorkspace(root: string): void {
+  write(root, 'blocks.ts', STASHED_BLOCKS);
+  write(root, 'untracked-in-stash.txt', STASH_UNTRACKED);
+  git(root, 'stash', 'push', '-u', '-m', 'fixture stash', '--', 'blocks.ts', 'untracked-in-stash.txt');
+  write(root, 'added.txt', STAGED_ADDED);
+  git(root, 'add', '--', 'added.txt');
+  write(root, 'added.txt', WORKTREE_ADDED);
+  write(root, 'hooks.ts', DIRTY_HOOKS);
+  write(root, 'untracked.txt', 'untracked\n');
 }
 
 export function gitOutput(cwd: string, ...args: string[]): string {

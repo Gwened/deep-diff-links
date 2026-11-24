@@ -2,9 +2,9 @@ import * as vscode from 'vscode';
 import { DiffOpened, DiffOpener } from './diffOpener';
 import { ErrorCode, LinkError, messages } from './errors';
 import { resolveCommits } from './fileAtCommit';
-import { GitReader } from './gitReader';
+import { GitReader, headCommitSpec, stashCommitSpec } from './gitReader';
 import { resolveRepo } from './repoResolver';
-import { formatRanges, parseQuery, validateParams } from './validator';
+import { formatRanges, parseQuery, parseSide, toUriSide, validateParams } from './validator';
 
 export type HandleResult =
   | ({ ok: true } & DiffOpened)
@@ -50,32 +50,58 @@ export class DeepDiffUriHandler implements vscode.UriHandler {
     );
 
     const { root, gitPath } = await resolveRepo(p.repo);
-
-    let lookups;
-    try {
-      lookups = await resolveCommits(new GitReader(gitPath), root, [p.left, p.right]);
-    } catch (error) {
-      throw new LinkError('E2', messages.gitFailedCommit(`${p.left}..${p.right}`), error);
-    }
-    const shas: string[] = [];
-    for (const [i, param] of (['left', 'right'] as const).entries()) {
-      const r = lookups[i];
-      if (r.status === 'missing') throw new LinkError('U3', messages.commitNotFound(p[param], p.repo));
-      if (r.status === 'ambiguous') {
-        throw new LinkError('E1', messages.invalid(param, 'matches more than one object; use a longer SHA'));
-      }
-      shas.push(r.sha);
-    }
+    const reader = new GitReader(gitPath);
+    const left = await resolveLinkSide(reader, root, 'left', p.left, p.repo);
+    const right = await resolveLinkSide(reader, root, 'right', p.right, p.repo);
 
     return this.opener.open({
       repoName: p.repo,
       root,
       gitPath,
-      left: shas[0],
-      right: shas[1],
+      left,
+      right,
       path: p.path,
       line: p.line,
       ranges: p.ranges,
     });
+  }
+}
+
+async function resolveLinkSide(
+  reader: GitReader,
+  root: string,
+  param: 'left' | 'right',
+  value: string,
+  repo: string,
+): Promise<string> {
+  const token = parseSide(value);
+  if (!token) throw new LinkError('E1', messages.invalid(param, 'is not a valid side'));
+  try {
+    switch (token.kind) {
+      case 'sha': {
+        const [r] = await resolveCommits(reader, root, [token.value]);
+        if (r.status === 'missing') throw new LinkError('U3', messages.commitNotFound(value, repo));
+        if (r.status === 'ambiguous') {
+          throw new LinkError('E1', messages.invalid(param, 'matches more than one object; use a longer SHA'));
+        }
+        return toUriSide(token, r.sha);
+      }
+      case 'HEAD': {
+        const sha = await reader.revParseVerify(root, headCommitSpec());
+        if (!sha) throw new LinkError('U19', messages.headNotFound(repo));
+        return toUriSide(token);
+      }
+      case 'stash': {
+        const sha = await reader.revParseVerify(root, stashCommitSpec(token.n));
+        if (!sha) throw new LinkError('U18', messages.stashNotFound(`stash@{${token.n}}`, repo));
+        return toUriSide(token);
+      }
+      case 'worktree':
+      case 'staged':
+        return toUriSide(token);
+    }
+  } catch (error) {
+    if (error instanceof LinkError) throw error;
+    throw new LinkError('E2', messages.gitFailedCommit(value), error);
   }
 }

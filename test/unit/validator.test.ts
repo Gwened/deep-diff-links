@@ -1,5 +1,5 @@
 import * as assert from 'assert';
-import { formatRanges, parseQuery, validateParams, validatePath, validateSha } from '../../src/validator';
+import { formatRanges, formatSideLabel, parseQuery, parseSide, toUriSide, validateParams, validatePath, validateSha } from '../../src/validator';
 
 const base = { repo: 'my-app', left: 'fcaac3532', right: 'f756bcd28', path: 'app/web/utils/hooks.ts' };
 const entries = (o: Record<string, string>) => Object.entries(o) as Array<[string, string]>;
@@ -32,7 +32,6 @@ describe('validator', () => {
       'mixed case': 'abcDef0',
       'branch name': 'develop',
       'branch with slash': 'feature/x',
-      'HEAD': 'HEAD',
       'ref expression': 'abcdef0~1',
       'leading dash': '-abcdef0',
       'shell metachar': 'abcdef0;rm',
@@ -147,5 +146,51 @@ describe('[v1.1] lines', () => {
   it('formatRanges', () => {
     assert.strictEqual(formatRanges([[25, 30], [120, 120]]), '25-30, 120');
     assert.strictEqual(formatRanges([[25, 30], [120, 120]], ','), '25-30,120');
+  });
+});
+
+describe('[v1.2] sides', () => {
+  const ok = (left: string, right = 'abcdef0') => {
+    const r = validateParams(entries({ ...base, left, right }));
+    assert.ok(r.ok, `${left} / ${right}`);
+    return r.ok ? r.params : undefined;
+  };
+  for (const token of ['HEAD', 'worktree', 'staged', 'stash', 'stash@{0}', 'stash@{99}', 'abcdef0']) {
+    it(`accepts ${token}`, () => {
+      ok(token);
+      ok('abcdef0', token);
+    });
+  }
+  it('keeps the token as written', () => {
+    const r = validateParams(entries({ ...base, left: 'HEAD', right: 'worktree' }));
+    assert.ok(r.ok && r.params.left === 'HEAD' && r.params.right === 'worktree');
+  });
+  for (const [name, value] of Object.entries({
+    head: 'head',
+    'HEAD~1': 'HEAD~1',
+    main: 'main',
+    'stash@{100}': 'stash@{100}',
+    'stash@{01}': 'stash@{01}',
+    'stash@{1.hour.ago}': 'stash@{1.hour.ago}',
+    'stash^2': 'stash^2',
+    'branch with slash': 'feature/x',
+  })) {
+    it(`rejects ${name}`, () => {
+      rejects({ ...base, left: value }, 'left');
+      rejects({ ...base, right: value }, 'right');
+    });
+  }
+  it('parseSide / toUriSide / formatSideLabel', () => {
+    assert.deepStrictEqual(parseSide('stash'), { kind: 'stash', n: 0 });
+    assert.strictEqual(toUriSide({ kind: 'stash', n: 0 }), 'stash.0');
+    assert.strictEqual(toUriSide({ kind: 'sha', value: 'abcdef0' }, 'a'.repeat(40)), 'a'.repeat(40));
+    assert.strictEqual(formatSideLabel('head'), 'HEAD');
+    assert.strictEqual(formatSideLabel('stash.3'), 'stash@{3}');
+    assert.strictEqual(formatSideLabel('stash'), 'stash@{0}');
+    assert.strictEqual(formatSideLabel('a'.repeat(40)), 'a'.repeat(7));
+  });
+  it('validateSha still rejects live tokens', () => {
+    assert.ok(validateSha('HEAD'));
+    assert.ok(validateSha('worktree'));
   });
 });

@@ -13,7 +13,7 @@ export interface ResolvedRepo {
 
 const API_INIT_TIMEOUT_MS = 5_000;
 
-async function getGitApi(): Promise<API> {
+export async function getGitApi(): Promise<API> {
   const ext = vscode.extensions.getExtension<GitExtension>('vscode.git');
   if (!ext) throw new LinkError('E3', messages.gitDisabled(), 'vscode.git extension not found');
   let exports: GitExtension;
@@ -69,4 +69,18 @@ export async function resolveRepo(name: string): Promise<ResolvedRepo> {
     throw new LinkError('E4', messages.notARepo(name), error);
   }
   throw new LinkError('E4', messages.notARepo(name));
+}
+
+function samePath(a: string, b: string): boolean {
+  return path.normalize(a) === path.normalize(b);
+}
+
+/** Subscribe to Git-extension repo state. `undefined` if this folder is not an open Git repository. */
+export async function watchRepoState(root: string, listener: () => void): Promise<vscode.Disposable | undefined> {
+  const api = await getGitApi();
+  const repo =
+    api.getRepository(vscode.Uri.file(root)) ??
+    api.repositories.find((r) => samePath(r.rootUri.fsPath, root));
+  if (!repo) return undefined;
+  return repo.state.onDidChange(listener);
 }

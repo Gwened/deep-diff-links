@@ -23,9 +23,68 @@ export type ValidationResult =
   | { ok: false; param: string; reason: string };
 
 const SHA_RE = /^[0-9a-f]{7,40}$/;
+export const SHA40_RE = /^[0-9a-f]{40}$/;
+/** `stash` or `stash@{0}`–`stash@{99}` (no leading zeros except `{0}`). */
+const STASH_RE = /^stash(?:@\{([0-9]|[1-9][0-9])\})?$/;
+/** Authority of a `deep-diff://` URI: sha40 or live token (`stash.N`). */
+/** `HEAD` is also accepted as `head`: vscode.Uri lowercases the authority like a hostname. */
+export const URI_SIDE_RE = /^(?:[0-9a-f]{40}|HEAD|head|worktree|staged|stash\.(?:[0-9]|[1-9][0-9]))$/;
 const LINE_RE = /^[1-9][0-9]{0,8}$/;
 const RANGE_RE = /^([1-9][0-9]{0,8})(?:-([1-9][0-9]{0,8}))?$/;
 const KNOWN = new Set(['repo', 'left', 'right', 'path', 'line', 'lines']);
+
+export type SideToken =
+  | { kind: 'sha'; value: string }
+  | { kind: 'HEAD' }
+  | { kind: 'worktree' }
+  | { kind: 'staged' }
+  | { kind: 'stash'; n: number };
+
+export function parseSide(value: string): SideToken | undefined {
+  if (SHA_RE.test(value)) return { kind: 'sha', value };
+  if (value === 'HEAD' || value === 'worktree' || value === 'staged') return { kind: value };
+  const m = STASH_RE.exec(value);
+  if (m) return { kind: 'stash', n: m[1] === undefined ? 0 : Number(m[1]) };
+  return undefined;
+}
+
+/** Identity used as `deep-diff://` authority and in partial query JSON. */
+export function toUriSide(token: SideToken, sha40?: string): string {
+  switch (token.kind) {
+    case 'sha':
+      if (!sha40 || !SHA40_RE.test(sha40)) throw new Error('toUriSide requires a resolved sha40');
+      return sha40;
+    case 'HEAD':
+    case 'worktree':
+    case 'staged':
+      return token.kind;
+    case 'stash':
+      return `stash.${token.n}`;
+  }
+}
+
+export function fromUriSide(authority: string): SideToken | undefined {
+  if (SHA40_RE.test(authority)) return { kind: 'sha', value: authority };
+  if (authority === 'HEAD' || authority === 'head') return { kind: 'HEAD' };
+  if (authority === 'worktree' || authority === 'staged') return { kind: authority };
+  const m = /^stash\.([0-9]|[1-9][0-9])$/.exec(authority);
+  if (m) return { kind: 'stash', n: Number(m[1]) };
+  return undefined;
+}
+
+export function isLiveUriSide(side: string): boolean {
+  return !SHA40_RE.test(side);
+}
+
+/** Title / error label: 7-char SHA, `stash@{n}`, or the live keyword. */
+export function formatSideLabel(side: string): string {
+  if (SHA_RE.test(side)) return side.slice(0, 7);
+  if (side === 'head') return 'HEAD';
+  if (side === 'stash') return 'stash@{0}';
+  const m = /^stash\.(\d+)$/.exec(side);
+  if (m) return `stash@{${m[1]}}`;
+  return side;
+}
 
 /**
  * Characters rejected in `repo` and `path` (AC3). The extension never uses a
@@ -38,6 +97,12 @@ const FORBIDDEN_CHARS = /[\u0000-\u001f\u007f`$;|&<>"'\\*?!]/;
 
 export function validateSha(value: string): string | undefined {
   return SHA_RE.test(value) ? undefined : 'must be a lowercase hex commit SHA of 7 to 40 characters';
+}
+
+export function validateSide(value: string): string | undefined {
+  return parseSide(value)
+    ? undefined
+    : 'must be a lowercase hex commit SHA of 7 to 40 characters, or HEAD, worktree, staged, stash, or stash@{n}';
 }
 
 export function validatePath(value: string): string | undefined {
@@ -125,8 +190,8 @@ export function validateParams(entries: Array<[string, string]>): ValidationResu
 
   const checks: Array<[string, string | undefined]> = [
     ['repo', validateRepo(repo)],
-    ['left', validateSha(left)],
-    ['right', validateSha(right)],
+    ['left', validateSide(left)],
+    ['right', validateSide(right)],
     ['path', validatePath(path)],
     ['line', line === undefined ? undefined : validateLine(line)],
   ];

@@ -17,7 +17,7 @@ The debounce logic changed here: [hooks.ts:25-30,120-160](vscode://oliviercado.d
 Click the link, in the Markdown preview or in the source, and the built-in diff editor opens:
 
 - **It shows the change being discussed.** It opens that file between those two commits. With `lines`, only the change blocks in those lines are highlighted.
-- **It works from any branch.** Neither commit needs to be checked out. Content is read straight from git history.
+- **It works from any branch.** Neither commit needs to be checked out. Target content using SHAs is read straight from git history. `HEAD`, `worktree`, `staged` and `stash` sides follow the repository as it is now.
 - **It leaves your work alone.** Nothing is checked out, stashed or written, so a dirty working tree is fine.
 
 ## Scope
@@ -34,18 +34,19 @@ It is not a replacement for GitLens or other general git tools, and it works alo
 ## Link format
 
 ```
-vscode://oliviercado.deep-diff-links/diff?repo=<folder>&left=<sha>&right=<sha>&path=<repo-relative-path>[&line=<n>][&lines=<ranges>]
+vscode://oliviercado.deep-diff-links/diff?repo=<folder>&left=<side>&right=<side>&path=<repo-relative-path>[&line=<n>][&lines=<ranges>]
 ```
 
 ```markdown
 [hooks.ts:80](vscode://oliviercado.deep-diff-links/diff?repo=my-app&left=fcaac3532&right=f756bcd28&path=app/web/utils/hooks.ts&line=80)
 [hooks.ts:25-30,120-160](vscode://oliviercado.deep-diff-links/diff?repo=my-app&left=fcaac3532&right=f756bcd28&path=app/web/utils/hooks.ts&lines=25-30,120-160)
+[uncommitted](vscode://oliviercado.deep-diff-links/diff?repo=my-app&left=HEAD&right=worktree&path=app/web/utils/hooks.ts)
 ```
 
 | Parameter | Rules |
 |---|---|
 | `repo` | Basename of exactly one open workspace folder. |
-| `left`, `right` | Lowercase hex commit SHA, 7–40 characters. Branches and tags are rejected. |
+| `left`, `right` | A **side**: lowercase hex commit SHA (7–40 characters), or `HEAD`, `worktree`, `staged`, `stash`, or `stash@{0}`–`stash@{99}`. Branches, tags and `HEAD~1` are rejected. Percent-encode `{` `}` in `stash@{n}` (`stash%40%7B1%7D`). |
 | `path` | Repo-relative, forward slashes. No `..`, `.`, leading `/`, backslashes, control characters, or `` ` $ ; \| & < > " ' * ? ! ``. Percent-encode spaces and non-ASCII characters. |
 | `line` | Optional positive integer; the right side opens with that line selected. |
 | `lines` | Optional ranges such as `25-30,120-160` (right-side line numbers). Gives a **partial diff**: only the changes touching those lines are highlighted. Without it you get the full diff. |
@@ -57,6 +58,12 @@ vscode://oliviercado.deep-diff-links/diff?repo=<folder>&left=<sha>&right=<sha>&p
 - For an added or deleted file, ranges pick individual lines. For a deleted file, line numbers refer to the old file.
 - If nothing changed in the ranges, the diff still opens at the first range and you get an info message.
 - Turn on `diffEditor.hideUnchangedRegions.enabled` to fold everything outside the selected blocks.
+
+### Live sides (`HEAD`, `worktree`, `staged`, `stash`)
+
+- `HEAD` is the checked-out commit, not the file on disk. `staged` is the index. `worktree` is the file on disk after git's clean filters / CRLF (not a `file://` URI, so it is not editable).
+- `stash` is `stash@{0}`'s WIP tree; `stash@{n}` selects that stash. Untracked files from `git stash -u` are read from the untracked tree when they are missing from the WIP tree.
+- Live sides update while the diff stays open. Commit SHAs stay frozen.
 
 Write links with `vscode://`. They work from the Markdown preview or from Cmd/Ctrl-click in the Markdown source.
 
@@ -87,8 +94,10 @@ Every failure shows a notification and writes a line to the **Deep Diff Links** 
 | Code | When |
 |---|---|
 | U3 | A commit isn't in the clone |
-| U6 | The path isn't in either commit |
+| U6 | The path isn't present on either side |
 | U11 | Info only: no changes in the requested `lines` |
+| U18 | That stash isn't in the repository |
+| U19 | `HEAD` can't be resolved (unborn branch) |
 | U8 / U9 | No workspace folder, or more than one, has the `repo` name |
 | E1 | A parameter is invalid (the message names the parameter, never its value) |
 | E2 | Git failed or timed out (10 s) |

@@ -3,7 +3,21 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import type { DeepDiffLinksApi } from '../../../src/extension';
-import { ADDED, BLOCKS_V1, BLOCKS_V2, DELETED, Fixture, HOOKS_V1, HOOKS_V2, gitOutput } from '../../fixtureRepo';
+import {
+  ADDED,
+  BLOCKS_V1,
+  BLOCKS_V2,
+  DELETED,
+  DIRTY_HOOKS,
+  Fixture,
+  HOOKS_V1,
+  HOOKS_V2,
+  STAGED_ADDED,
+  STASHED_BLOCKS,
+  STASH_UNTRACKED,
+  WORKTREE_ADDED,
+  gitOutput,
+} from '../../fixtureRepo';
 
 const fx: Fixture = JSON.parse(process.env.CDL_FIXTURE!);
 const AUTHORITY = 'oliviercado.deep-diff-links';
@@ -58,12 +72,13 @@ describe('deep diff links (integration)', () => {
   it('U2/AC2: HEAD, index and dirty working tree are unchanged', async () => {
     const head = gitOutput(fx.root, 'rev-parse', 'HEAD');
     const status = gitOutput(fx.root, 'status', '--porcelain');
+    const stash = gitOutput(fx.root, 'stash', 'list');
     const r = await api.handleUri(link(params()));
     assert.ok(r.ok);
     assert.strictEqual(gitOutput(fx.root, 'rev-parse', 'HEAD'), head);
     assert.strictEqual(gitOutput(fx.root, 'status', '--porcelain'), status);
-    assert.strictEqual(fs.readFileSync(path.join(fx.root, 'hooks.ts'), 'utf8'), 'dirty working tree\n');
-    assert.strictEqual(gitOutput(fx.root, 'stash', 'list'), '');
+    assert.strictEqual(fs.readFileSync(path.join(fx.root, 'hooks.ts'), 'utf8'), DIRTY_HOOKS);
+    assert.strictEqual(gitOutput(fx.root, 'stash', 'list'), stash);
   });
 
   it('U3: missing commit shows an error and opens nothing', async () => {
@@ -95,7 +110,7 @@ describe('deep diff links (integration)', () => {
     const r = await api.handleUri(link(params({ path: 'nope/none.ts' })));
     assert.ok(!r.ok);
     assert.strictEqual(r.code, 'U6');
-    assert.strictEqual(r.message, '`nope/none.ts` is not in either commit.');
+    assert.strictEqual(r.message, '`nope/none.ts` is not present on either side.');
   });
 
   it('U7: line parameter selects the line on the right side', async () => {
@@ -322,6 +337,117 @@ describe('deep diff links (integration)', () => {
       `${own}://${AUTHORITY}/diff?repo=fixture&left=abcdef0&right=abcdef1&path=b.ts`,
       'cursor://other.extension/x',
     ]);
+  });
+
+  describe('[v1.2] live sides', () => {
+    const objectFiles = () => {
+      const dir = path.join(fx.root, '.git', 'objects');
+      const walk = (d: string): string[] =>
+        fs.readdirSync(d, { withFileTypes: true }).flatMap((e) => {
+          const p = path.join(d, e.name);
+          if (e.name === 'pack' || e.name === 'info') return [];
+          return e.isDirectory() ? walk(p) : [p];
+        });
+      return walk(dir).sort();
+    };
+
+    it('U14: HEAD ↔ worktree', async () => {
+      const r = await api.handleUri(link(params({ left: 'HEAD', right: 'worktree', path: 'hooks.ts' })));
+      assert.ok(r.ok, JSON.stringify(r));
+      assert.strictEqual(r.title, 'hooks.ts (HEAD ↔ worktree)');
+      assert.strictEqual(r.leftUri.authority, 'HEAD');
+      assert.strictEqual(r.rightUri.authority, 'worktree');
+      assert.strictEqual(r.rightUri.scheme, 'deep-diff');
+      assert.strictEqual(await text(r.leftUri), HOOKS_V2);
+      assert.strictEqual(await text(r.rightUri), DIRTY_HOOKS);
+    });
+
+    it('U15: staged ↔ worktree (unstaged only)', async () => {
+      const r = await api.handleUri(link(params({ left: 'staged', right: 'worktree', path: 'added.txt' })));
+      assert.ok(r.ok, JSON.stringify(r));
+      assert.strictEqual(r.title, 'added.txt (staged ↔ worktree)');
+      assert.strictEqual(await text(r.leftUri), STAGED_ADDED);
+      assert.strictEqual(await text(r.rightUri), WORKTREE_ADDED);
+    });
+
+    it('U16: commit ↔ staged', async () => {
+      const r = await api.handleUri(link(params({ left: fx.c2.slice(0, 9), right: 'staged', path: 'added.txt' })));
+      assert.ok(r.ok, JSON.stringify(r));
+      assert.strictEqual(r.title, `added.txt (${fx.c2.slice(0, 7)} ↔ staged)`);
+      assert.strictEqual(await text(r.leftUri), ADDED);
+      assert.strictEqual(await text(r.rightUri), STAGED_ADDED);
+    });
+
+    it('U17: stash ↔ worktree', async () => {
+      const r = await api.handleUri(link(params({ left: 'stash', right: 'worktree', path: 'blocks.ts' })));
+      assert.ok(r.ok, JSON.stringify(r));
+      assert.strictEqual(r.title, 'blocks.ts (stash@{0} ↔ worktree)');
+      assert.strictEqual(r.leftUri.authority, 'stash.0');
+      assert.strictEqual(await text(r.leftUri), STASHED_BLOCKS);
+      assert.strictEqual(await text(r.rightUri), BLOCKS_V2);
+    });
+
+    it('U18: missing stash', async () => {
+      const before = tabCount();
+      const r = await api.handleUri(link(params({ left: 'stash@{99}', right: 'worktree', path: 'hooks.ts' })));
+      assert.ok(!r.ok);
+      assert.strictEqual(r.code, 'U18');
+      assert.strictEqual(r.message, 'Stash `stash@{99}` not found in `fixture`.');
+      assert.strictEqual(tabCount(), before);
+    });
+
+    it('U21: untracked worktree vs missing HEAD is not U6', async () => {
+      const r = await api.handleUri(link(params({ left: 'HEAD', right: 'worktree', path: 'untracked.txt' })));
+      assert.ok(r.ok, JSON.stringify(r));
+      assert.strictEqual(await text(r.leftUri), '');
+      assert.strictEqual(await text(r.rightUri), 'untracked\n');
+    });
+
+    it('U22: stash -u untracked file via ^3', async () => {
+      const r = await api.handleUri(link(params({ left: 'stash@{0}', right: 'worktree', path: 'untracked-in-stash.txt' })));
+      assert.ok(r.ok, JSON.stringify(r));
+      assert.strictEqual(await text(r.leftUri), STASH_UNTRACKED);
+      assert.strictEqual(await text(r.rightUri), '');
+    });
+
+    it('U20: saving the worktree file updates the open diff', async () => {
+      const r = await api.handleUri(link(params({ left: 'HEAD', right: 'worktree', path: 'hooks.ts' })));
+      assert.ok(r.ok);
+      assert.strictEqual(await text(r.rightUri), DIRTY_HOOKS);
+      const next = 'saved from U20\n';
+      fs.writeFileSync(path.join(fx.root, 'hooks.ts'), next);
+      let got = '';
+      for (let i = 0; i < 40; i++) {
+        got = await text(r.rightUri);
+        if (got === next) break;
+        await sleep(100);
+      }
+      fs.writeFileSync(path.join(fx.root, 'hooks.ts'), DIRTY_HOOKS);
+      assert.strictEqual(got, next);
+    });
+
+    it('partial lines between HEAD and worktree', async () => {
+      const r = await api.handleUri(link(params({ left: 'HEAD', right: 'worktree', path: 'hooks.ts', lines: '1' })));
+      assert.ok(r.ok, JSON.stringify(r));
+      assert.strictEqual(r.title, 'hooks.ts (HEAD (partial) ↔ worktree) · lines 1');
+      assert.strictEqual(await text(r.rightUri), DIRTY_HOOKS);
+    });
+
+    it('AC10: SHA–SHA title still uses 7-character SHAs', async () => {
+      const r = await api.handleUri(link(params()));
+      assert.ok(r.ok);
+      assert.strictEqual(r.title, `hooks.ts (${fx.c1.slice(0, 7)} ↔ ${fx.c2.slice(0, 7)})`);
+      assert.strictEqual(r.leftUri.authority, fx.c1);
+    });
+
+    it('AC2: live diff does not mutate status or the object database', async () => {
+      const status = gitOutput(fx.root, 'status', '--porcelain');
+      const before = objectFiles();
+      const r = await api.handleUri(link(params({ left: 'HEAD', right: 'worktree', path: 'hooks.ts', lines: '1' })));
+      assert.ok(r.ok);
+      assert.strictEqual(gitOutput(fx.root, 'status', '--porcelain'), status);
+      assert.deepStrictEqual(objectFiles(), before);
+    });
   });
 
   it('AC4: no webview is contributed', () => {

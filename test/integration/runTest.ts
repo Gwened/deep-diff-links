@@ -2,7 +2,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { runTests } from '@vscode/test-electron';
-import { createFixtureRepo } from '../fixtureRepo';
+import { applyLiveWorkspace, createFixtureRepo } from '../fixtureRepo';
 
 async function main() {
   // When launched from inside VS Code, this leaks in and makes the test instance start as plain Node.
@@ -10,9 +10,7 @@ async function main() {
   const tmp = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'cdl-int-')));
   try {
     const fx = createFixtureRepo(path.join(tmp, 'ws', 'fixture'));
-    // Dirty working tree: a modified tracked file and an untracked file.
-    fs.writeFileSync(path.join(fx.root, 'hooks.ts'), 'dirty working tree\n');
-    fs.writeFileSync(path.join(fx.root, 'untracked.txt'), 'untracked\n');
+    applyLiveWorkspace(fx.root);
     // Two folders sharing a basename (U9).
     fs.mkdirSync(path.join(tmp, 'one', 'dup'), { recursive: true });
     fs.mkdirSync(path.join(tmp, 'two', 'dup'), { recursive: true });

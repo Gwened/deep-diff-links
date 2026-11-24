@@ -1,16 +1,17 @@
 import * as vscode from 'vscode';
 import { CommitContentProvider, PartialRef, SideRef, toUri } from './contentProvider';
-import { LinkError, messages, short } from './errors';
+import { LinkError, SideReadError, messages } from './errors';
 import { FileSide } from './fileAtCommit';
 import { PartialPlan } from './hunkSelector';
-import { LineRange, formatRanges } from './validator';
+import { LineRange, formatRanges, formatSideLabel } from './validator';
 
 export interface DiffRequest {
   repoName: string;
   root: string;
   gitPath: string;
-  left: string; // full SHA
-  right: string; // full SHA
+  /** `deep-diff://` authority: sha40 or live token. */
+  left: string;
+  right: string;
   path: string;
   line?: number;
   ranges?: LineRange[];
@@ -25,14 +26,14 @@ export interface DiffOpened {
 }
 
 interface SideLabel {
-  sha: string;
+  id: string;
   absent?: boolean;
   partial?: boolean;
 }
 
-function label({ sha, absent, partial }: SideLabel): string {
+function label({ id, absent, partial }: SideLabel): string {
   const tags = [absent && 'absent', partial && 'partial'].filter(Boolean);
-  return tags.length ? `${short(sha)} (${tags.join(', ')})` : short(sha);
+  return tags.length ? `${formatSideLabel(id)} (${tags.join(', ')})` : formatSideLabel(id);
 }
 
 export function diffTitle(path: string, left: SideLabel, right: SideLabel, ranges?: LineRange[]): string {
@@ -46,18 +47,20 @@ export class DiffOpener {
     private readonly maxBytes: () => number,
   ) {}
 
-  private async guard<T>(sha: string, path: string, work: Promise<T>): Promise<T> {
+  private async guard<T>(side: string, path: string, work: Promise<T>): Promise<T> {
     try {
       return await work;
     } catch (error) {
-      throw new LinkError('E2', messages.gitFailed(sha, path), error);
+      if (error instanceof LinkError) throw error;
+      if (error instanceof SideReadError) throw new LinkError(error.code, error.message, error.detail);
+      throw new LinkError('E2', messages.gitFailed(side, path), error);
     }
   }
 
   /** Reads both sides (validating U6 and size), then opens the built-in diff editor. */
   async open(req: DiffRequest): Promise<DiffOpened> {
-    const leftRef: SideRef = { root: req.root, gitPath: req.gitPath, sha: req.left, path: req.path };
-    const rightRef: SideRef = { ...leftRef, sha: req.right };
+    const leftRef: SideRef = { root: req.root, gitPath: req.gitPath, side: req.left, path: req.path };
+    const rightRef: SideRef = { ...leftRef, side: req.right };
     const [left, right] = await Promise.all([
       this.guard(req.left, req.path, this.provider.read(leftRef)),
       this.guard(req.right, req.path, this.provider.read(rightRef)),
@@ -66,9 +69,9 @@ export class DiffOpener {
     if (left.kind === 'absent' && right.kind === 'absent') {
       throw new LinkError('U6', messages.pathInNeither(req.path));
     }
-    for (const [side, sha] of [[left, req.left], [right, req.right]] as const) {
+    for (const [side, id] of [[left, req.left], [right, req.right]] as const) {
       if (side.kind === 'tooLarge') {
-        throw new LinkError('SIZE', messages.tooLarge(req.path, sha, side.size, this.maxBytes()));
+        throw new LinkError('SIZE', messages.tooLarge(req.path, id, side.size, this.maxBytes()));
       }
     }
 
@@ -81,10 +84,12 @@ export class DiffOpener {
 
     const leftUri = toUri(leftRef, plan?.synthetic === 'left' ? partialRef : undefined);
     const rightUri = toUri(rightRef, plan?.synthetic === 'right' ? partialRef : undefined);
+    this.provider.watch(leftUri);
+    this.provider.watch(rightUri);
     const title = diffTitle(
       req.path,
-      { sha: req.left, absent: isAbsent(left), partial: plan?.synthetic === 'left' },
-      { sha: req.right, absent: isAbsent(right), partial: plan?.synthetic === 'right' },
+      { id: req.left, absent: isAbsent(left), partial: plan?.synthetic === 'left' },
+      { id: req.right, absent: isAbsent(right), partial: plan?.synthetic === 'right' },
       plan ? req.ranges : undefined,
     );
 

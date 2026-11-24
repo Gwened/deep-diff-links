@@ -29,8 +29,15 @@ export function activate(context: vscode.ExtensionContext): DeepDiffLinksApi {
 
   context.subscriptions.push(
     log,
+    provider,
     vscode.workspace.registerTextDocumentContentProvider(SCHEME, provider),
     vscode.window.registerUriHandler(handler),
+    vscode.workspace.onDidOpenTextDocument((doc) => {
+      if (doc.uri.scheme === SCHEME) provider.watch(doc.uri);
+    }),
+    vscode.workspace.onDidCloseTextDocument((doc) => {
+      if (doc.uri.scheme === SCHEME) provider.unwatch(doc.uri);
+    }),
     // In the markdown source editor, links written with another editor's scheme would be
     // opened as files and fail. Provide a link to the same place with this editor's scheme.
     vscode.languages.registerDocumentLinkProvider(

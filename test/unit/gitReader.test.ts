@@ -12,13 +12,36 @@ import {
   commitSpec,
   defaultExec,
   diffBlobsArgs,
+  diffNoIndexArgs,
+  hashObjectArgs,
+  headCommitSpec,
+  indexPathSpec,
   mapExecFailure,
   parseBatchCheck,
   pathSpec,
   readBlobArgs,
+  revParseVerifyArgs,
+  stashCommitSpec,
+  stashPathSpec,
+  stashUntrackedPathSpec,
 } from '../../src/gitReader';
-import { BINARY_TEXT, isBinary, readFileAtCommit, resolveCommits, sideText } from '../../src/fileAtCommit';
-import { ADDED, BLOCKS_V2, DELETED, Fixture, HOOKS_V1, HOOKS_V2, createFixtureRepo } from '../fixtureRepo';
+import { BINARY_TEXT, isBinary, readFileAtCommit, readFileAtSide, resolveCommits, sideText } from '../../src/fileAtCommit';
+import { SideReadError } from '../../src/errors';
+import {
+  ADDED,
+  BLOCKS_V2,
+  DELETED,
+  DIRTY_HOOKS,
+  Fixture,
+  HOOKS_V1,
+  HOOKS_V2,
+  STAGED_ADDED,
+  STASHED_BLOCKS,
+  STASH_UNTRACKED,
+  WORKTREE_ADDED,
+  applyLiveWorkspace,
+  createFixtureRepo,
+} from '../fixtureRepo';
 import { parseZeroContextDiff, planModified } from '../../src/hunkSelector';
 
 const failure = (props: Partial<ExecFailure>): ExecFailure => Object.assign(new Error('boom'), props);
@@ -28,13 +51,35 @@ describe('GitReader arguments', () => {
     assert.deepStrictEqual(batchCheckArgs(), ['cat-file', '--batch-check']);
     assert.deepStrictEqual(readBlobArgs('ab'.repeat(20)), ['cat-file', 'blob', 'ab'.repeat(20)]);
     assert.deepStrictEqual(diffBlobsArgs('a', 'b'), ['diff', '--no-color', '--no-ext-diff', '--no-textconv', '--text', '--diff-algorithm=myers', '-U0', 'a', 'b']);
+    assert.deepStrictEqual(diffNoIndexArgs('/tmp/L', '/tmp/R'), [
+      'diff',
+      '--no-color',
+      '--no-ext-diff',
+      '--no-textconv',
+      '--text',
+      '--diff-algorithm=myers',
+      '-U0',
+      '--no-index',
+      '--',
+      '/tmp/L',
+      '/tmp/R',
+    ]);
+    assert.deepStrictEqual(revParseVerifyArgs('HEAD^{commit}'), ['rev-parse', '--verify', '--end-of-options', 'HEAD^{commit}']);
+    assert.deepStrictEqual(hashObjectArgs('a/b.ts'), ['hash-object', '-w', '--path=a/b.ts', '--stdin']);
     assert.strictEqual(commitSpec('abcdef0'), 'abcdef0^{commit}');
+    assert.strictEqual(headCommitSpec(), 'HEAD^{commit}');
+    assert.strictEqual(stashCommitSpec(0), 'stash@{0}^{commit}');
     assert.strictEqual(pathSpec('abcdef0', 'a/b.ts'), 'abcdef0:a/b.ts');
+    assert.strictEqual(indexPathSpec('a/b.ts'), ':0:a/b.ts');
+    assert.strictEqual(stashPathSpec(1, 'a.ts'), 'stash@{1}:a.ts');
+    assert.strictEqual(stashUntrackedPathSpec(1, 'a.ts'), 'stash@{1}^3:a.ts');
   });
 
   it('pathSpec refuses traversal even if the validator was bypassed', () => {
     assert.throws(() => pathSpec('abcdef0', '../x'));
     assert.throws(() => pathSpec('abcdef0', '/etc/passwd'));
+    assert.throws(() => indexPathSpec('../x'));
+    assert.throws(() => stashUntrackedPathSpec(0, '/etc/passwd'));
   });
 
   it('passes cwd, timeout, stdin and args to exec', async () => {
@@ -149,7 +194,8 @@ describe('reading a fixture repo', function () {
   const textOf = async (sha: string, file: string) => {
     const side = await readFileAtCommit(reader, fx.root, sha, file, MAX);
     assert.strictEqual(side.kind, 'text');
-    return side.kind === 'text' ? side : assert.fail();
+    if (side.kind !== 'text' || side.oid === undefined) return assert.fail();
+    return { text: side.text, oid: side.oid };
   };
 
   it('reads both versions of a modified file', async () => {
@@ -202,5 +248,103 @@ describe('reading a fixture repo', function () {
 
   it('nonexistent path', async () => {
     assert.deepStrictEqual(await readFileAtCommit(reader, fx.root, fx.c2, 'nope/none.ts', MAX), { kind: 'absent' });
+  });
+});
+
+describe('[v1.2] live sides in a fixture repo', function () {
+  this.timeout(20_000);
+  let fx: Fixture;
+  let tmp: string;
+  const reader = new GitReader('git');
+  const MAX = 10 * 1024 * 1024;
+  const objects = (root: string) => {
+    const dir = path.join(root, '.git', 'objects');
+    const walk = (d: string): string[] =>
+      fs.readdirSync(d, { withFileTypes: true }).flatMap((e) => {
+        const p = path.join(d, e.name);
+        if (e.name === 'pack' || e.name === 'info') return [];
+        return e.isDirectory() ? walk(p) : [p];
+      });
+    return walk(dir).sort();
+  };
+
+  before(() => {
+    tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'cdl-live-'));
+    fx = createFixtureRepo(path.join(tmp, 'fixture'));
+    applyLiveWorkspace(fx.root);
+  });
+  after(() => fs.rmSync(tmp, { recursive: true, force: true }));
+
+  it('HEAD is the checked-out commit, not the dirty file', async () => {
+    const side = await readFileAtSide(reader, fx.root, 'HEAD', 'hooks.ts', MAX);
+    assert.strictEqual(side.kind, 'text');
+    if (side.kind === 'text') assert.strictEqual(side.text, HOOKS_V2);
+  });
+
+  it('worktree is the file on disk after git clean conversion', async () => {
+    const side = await readFileAtSide(reader, fx.root, 'worktree', 'hooks.ts', MAX);
+    assert.strictEqual(side.kind, 'text');
+    if (side.kind === 'text') {
+      assert.strictEqual(side.text, DIRTY_HOOKS);
+      assert.strictEqual(side.oid, undefined);
+    }
+  });
+
+  it('staged is the index, not HEAD or worktree', async () => {
+    const side = await readFileAtSide(reader, fx.root, 'staged', 'added.txt', MAX);
+    assert.strictEqual(side.kind, 'text');
+    if (side.kind === 'text') assert.strictEqual(side.text, STAGED_ADDED);
+    const wt = await readFileAtSide(reader, fx.root, 'worktree', 'added.txt', MAX);
+    assert.strictEqual(wt.kind, 'text');
+    if (wt.kind === 'text') assert.strictEqual(wt.text, WORKTREE_ADDED);
+  });
+
+  it('stash@{0} is the WIP tree', async () => {
+    const side = await readFileAtSide(reader, fx.root, 'stash.0', 'blocks.ts', MAX);
+    assert.strictEqual(side.kind, 'text');
+    if (side.kind === 'text') assert.strictEqual(side.text, STASHED_BLOCKS);
+  });
+
+  it('U22: untracked file from git stash -u is read from ^3', async () => {
+    const side = await readFileAtSide(reader, fx.root, 'stash.0', 'untracked-in-stash.txt', MAX);
+    assert.strictEqual(side.kind, 'text');
+    if (side.kind === 'text') assert.strictEqual(side.text, STASH_UNTRACKED);
+  });
+
+  it('U18: missing stash', async () => {
+    await assert.rejects(readFileAtSide(reader, fx.root, 'stash.99', 'hooks.ts', MAX), (e: unknown) => e instanceof SideReadError && e.code === 'U18');
+  });
+
+  it('untracked worktree file is present; missing elsewhere is absent', async () => {
+    const wt = await readFileAtSide(reader, fx.root, 'worktree', 'untracked.txt', MAX);
+    assert.strictEqual(wt.kind, 'text');
+    assert.deepStrictEqual(await readFileAtSide(reader, fx.root, 'HEAD', 'untracked.txt', MAX), { kind: 'absent' });
+    assert.deepStrictEqual(await readFileAtSide(reader, fx.root, 'staged', 'untracked.txt', MAX), { kind: 'absent' });
+  });
+
+  it('does not write to the user object database', async () => {
+    const before = objects(fx.root);
+    await readFileAtSide(reader, fx.root, 'worktree', 'hooks.ts', MAX);
+    await reader.diffNoIndex('a\n', 'b\n', MAX);
+    assert.deepStrictEqual(objects(fx.root), before);
+  });
+
+  it('diff --no-index reports a one-line change', async () => {
+    const out = await reader.diffNoIndex('a\n', 'b\n', MAX);
+    assert.match(out, /@@ -1 \+1 @@/);
+  });
+
+  it('symlink that escapes the repo is E1', async function () {
+    if (process.platform === 'win32') this.skip();
+    const outside = path.join(tmp, 'outside.txt');
+    fs.writeFileSync(outside, 'secret\n');
+    fs.symlinkSync(outside, path.join(fx.root, 'escape.txt'));
+    await assert.rejects(readFileAtSide(reader, fx.root, 'worktree', 'escape.txt', MAX), (e: unknown) => e instanceof SideReadError && e.code === 'E1');
+  });
+
+  it('rev-parse --verify finds HEAD and not a fake stash', async () => {
+    const head = await reader.revParseVerify(fx.root, 'HEAD^{commit}');
+    assert.strictEqual(head, fx.c2);
+    assert.strictEqual(await reader.revParseVerify(fx.root, 'stash@{99}^{commit}'), undefined);
   });
 });
