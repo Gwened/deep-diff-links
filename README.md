@@ -61,6 +61,8 @@ vscode://oliviercado.deep-diff-links/diff?repo=<folder>&left=<sha>&right=<sha>&p
 
 **VS Code and Cursor.** Write links with `vscode://` or `cursor://`. They work in both editors, from the markdown preview or from Cmd/Ctrl-click in the markdown source. The extension points them at the editor you're in.
 
+**Cursor.** The tab Preview button does not open `vscode://` links ([bug](https://forum.cursor.com/t/links-of-md-files-are-not-working-on-preview-mode/154174)). Use **Markdown: Open Preview**, click in the source, or write `cursor://`.
+
 The first time you click a link, VS Code asks whether to let the extension open the URI. Tick "don't ask again" to skip that afterwards.
 
 If a commit isn't in your clone, run `git fetch` and click again. The extension never touches the network.
