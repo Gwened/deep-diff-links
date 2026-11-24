@@ -7,7 +7,8 @@ export interface LinkParams {
   repo: string;
   left: string;
   right: string;
-  path: string;
+  /** Omitted → multi-file diff of every path that differs between the sides. */
+  path?: string;
   line?: number;
   /** [v1.1] Sorted, merged, inclusive 1-based ranges from `lines`. */
   ranges?: LineRange[];
@@ -177,22 +178,29 @@ export function validateParams(entries: Array<[string, string]>): ValidationResu
     seen.set(key, value);
   }
 
-  for (const required of ['repo', 'left', 'right', 'path']) {
+  for (const required of ['repo', 'left', 'right']) {
     if (!seen.has(required)) return { ok: false, param: required, reason: 'is missing' };
   }
 
   const repo = seen.get('repo')!;
   const left = seen.get('left')!;
   const right = seen.get('right')!;
-  const path = seen.get('path')!;
+  const path = seen.get('path');
   const line = seen.get('line');
   const lines = seen.get('lines');
+
+  if (path === undefined && line !== undefined) {
+    return { ok: false, param: 'line', reason: 'cannot be used without path' };
+  }
+  if (path === undefined && lines !== undefined) {
+    return { ok: false, param: 'lines', reason: 'cannot be used without path' };
+  }
 
   const checks: Array<[string, string | undefined]> = [
     ['repo', validateRepo(repo)],
     ['left', validateSide(left)],
     ['right', validateSide(right)],
-    ['path', validatePath(path)],
+    ['path', path === undefined ? undefined : validatePath(path)],
     ['line', line === undefined ? undefined : validateLine(line)],
   ];
   for (const [param, reason] of checks) {
@@ -212,7 +220,7 @@ export function validateParams(entries: Array<[string, string]>): ValidationResu
       repo,
       left,
       right,
-      path,
+      ...(path !== undefined ? { path } : {}),
       line: line === undefined ? undefined : Number(line),
       ...(ranges ? { ranges } : {}),
     },

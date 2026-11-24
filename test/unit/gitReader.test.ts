@@ -8,6 +8,7 @@ import {
   GIT_TIMEOUT_MS,
   GitError,
   GitReader,
+  NAME_ONLY_FLAGS,
   batchCheckArgs,
   commitSpec,
   defaultExec,
@@ -24,6 +25,7 @@ import {
   stashCommitSpec,
   stashPathSpec,
   stashUntrackedPathSpec,
+  untrackedArgs,
 } from '../../src/gitReader';
 import { BINARY_TEXT, isBinary, readFileAtCommit, readFileAtSide, resolveCommits, sideText } from '../../src/fileAtCommit';
 import { SideReadError } from '../../src/errors';
@@ -73,6 +75,8 @@ describe('GitReader arguments', () => {
     assert.strictEqual(indexPathSpec('a/b.ts'), ':0:a/b.ts');
     assert.strictEqual(stashPathSpec(1, 'a.ts'), 'stash@{1}:a.ts');
     assert.strictEqual(stashUntrackedPathSpec(1, 'a.ts'), 'stash@{1}^3:a.ts');
+    assert.deepStrictEqual(untrackedArgs(), ['ls-files', '-z', '--others', '--exclude-standard']);
+    assert.deepStrictEqual(NAME_ONLY_FLAGS, ['diff', '--name-only', '-z']);
   });
 
   it('pathSpec refuses traversal even if the validator was bypassed', () => {

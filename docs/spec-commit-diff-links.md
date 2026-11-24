@@ -2,32 +2,35 @@
 
 Written for: the engineer who will build this extension, and the reviewer who will use it to read diffs from markdown reviews.
 
-**Status:** v1, v1.1 (partial diffs and automatic editor scheme), and **[v1.2]** live sides (`HEAD`, `worktree`, `staged`, `stash`) implemented.
-**Spec vs app version:** `v1` / `v1.1` / `v1.2` are feature slices in this document, not the extension semver (`package.json`).
+**Status:** v1, v1.1 (partial diffs and automatic editor scheme), **[v1.2]** live sides (`HEAD`, `worktree`, `staged`, `stash`), and **[v1.3]** multi-file diffs (omit `path`) implemented.
+**Spec vs app version:** `v1` / `v1.1` / `v1.2` / `v1.3` are feature slices in this document, not the extension semver (`package.json`).
 **Name:** Deep Diff Links, extension id `oliviercado.deep-diff-links` (renamed from Commit Diff Links; see decisions 13 and 14).
 
 ---
 
 ## 1. Problem
 
-Review documents (like `review-fcaac3532..f756bcd28.md`) point at code changes between two commits. Today the links either open a patch file, which is hard to read, or open the working-tree file, which shows the current state and no change. Reviewers want to click a link and see the **native VS Code diff editor** (red/green highlighting, side-by-side, inline toggle) comparing two versions of one file.
+Review documents (like `review-fcaac3532..f756bcd28.md`) point at code changes between two commits. Today the links either open a patch file, which is hard to read, or open the working-tree file, which shows the current state and no change. Reviewers want to click a link and see the **native VS Code diff editor** (red/green highlighting, side-by-side, inline toggle) comparing two versions of one file, **[v1.3]** or the built-in multi-file diff of every path that differs between two sides.
 
 Those versions are often two commits the reviewer does not have checked out. They are also, **[v1.2]**, the checked-out commit (`HEAD`), the index (`staged`), the file on disk (`worktree`), or a stash. The extension must render the diff without checking anything out.
 
 ## 2. Goals
 
-- G1. A markdown link opens the native VS Code diff editor for one file between two sides (two commits in v1; **[v1.2]** also `HEAD`, `worktree`, `staged`, and `stash`).
+- G1. A markdown link opens the native VS Code diff editor for one file between two sides (two commits in v1; **[v1.2]** also `HEAD`, `worktree`, `staged`, and `stash`). **[v1.3]** Omitting `path` opens the built-in multi-file diff of every path that differs.
 - G2. Works when the reviewer is on any branch, with a dirty working tree, and without checking out either commit.
 - G3. Works when the commits exist in the local clone. If they don't, fail with an actionable message (not a stack trace).
-- G4. Uses only the built-in `vscode.diff` UI. No custom webview, no custom highlighting.
+- G4. Uses only the built-in diff UI (`vscode.diff`, **[v1.3]** `_workbench.openMultiDiffEditor`). No custom webview, no custom highlighting.
 - G5. Safe to click: a link cannot run arbitrary commands or read files outside the repository.
 - G6. **[v1.1]** A link can name line ranges, such as `hooks.ts:25-30,120-160`. The diff then shows only the changes that touch those ranges, and every other change in the file looks unchanged. A link with no ranges shows the full diff, as in v1.
 - G7. **[v1.2]** A live side (`HEAD`, `worktree`, `staged`, `stash`) tracks the repository as it is now. An open diff updates when that side changes. There is no snapshot mode and no way to pin live content in the URL.
+- G8. **[v1.3]** A link without `path` is the whole change between those two sides, not a summary patch or a custom tree view.
 
 ## 3. Non-goals
 
 - Fetching missing commits from the network automatically (the user runs `git fetch`; see §9).
-- Showing a commit-range summary (one file per link; a summary view is a later feature).
+- A custom commit-range summary (patch list, stats). **[v1.3]** The built-in multi-file diff is the summary.
+- **[v1.3]** Refreshing the *list* of files in an open multi-file diff when new paths appear or disappear. Content of files already in that list still follows G7.
+- **[v1.3]** Rename detection (`git diff -M`). A rename is two paths (deleted old name, added new name).
 - Rendering diffs for submodules or binary files beyond "binary, cannot display".
 - Editing either side of the diff. The worktree side is **not** a `file://` URI.
 - Supporting remote-only repositories (no clone = no feature).
@@ -62,18 +65,21 @@ Those versions are often two commits the reviewer does not have checked out. The
 | U20 | **[v1.2]** Open `worktree` diff; user saves the file | The open diff updates to the new disk content. No second click |
 | U21 | **[v1.2]** Path is untracked, not staged, and missing from the other side | U6 (absent on both sides), unless the other side is `worktree` and the file exists on disk |
 | U22 | **[v1.2]** Path is missing from the stash WIP tree but present in the untracked commit (`git stash -u`) | The stash side shows the untracked tree (`stash@{n}^3`) |
+| U23 | **[v1.3]** No `path`, and no file differs between the sides | Notification: "No files differ between `<left>` and `<right>`." Nothing else happens |
+| U24 | **[v1.3]** No `path`, files differ | Built-in multi-file diff opens, titled `<leftLabel> ↔ <rightLabel>`, one entry per differing path. A `worktree` side includes untracked files. A `stash` side includes `stash@{n}^3` (U22) |
+| U25 | **[v1.3]** No `path`, but `line` or `lines` is set | E1 on that parameter: "cannot be used without path." |
 
-A SHA–SHA link behaves exactly as in v1 / v1.1 (U1–U13).
+A SHA–SHA link with `path` behaves exactly as in v1 / v1.1 (U1–U13).
 
 ## 5. Link format
 
 A link is a `vscode://` URI, which VS Code routes to the extension's URI handler. This works in the markdown preview without enabling command trust.
 
 ```
-vscode://oliviercado.deep-diff-links/diff?repo=<repo-name>&left=<side>&right=<side>&path=<repo-relative-path>[&line=<n>][&lines=<ranges>]
+vscode://oliviercado.deep-diff-links/diff?repo=<repo-name>&left=<side>&right=<side>[&path=<repo-relative-path>][&line=<n>][&lines=<ranges>]
 ```
 
-`<side>` is a commit SHA or a **[v1.2]** live token (§5.1). `path` is always the same: a repo-relative file path. `left` / `right` choose which copy of that file to show.
+`<side>` is a commit SHA or a **[v1.2]** live token (§5.1). With `path`, `left` / `right` choose which copy of that file to show. **[v1.3]** Without `path`, the link is every file that differs between those sides.
 
 Examples (as they would appear in the review):
 
@@ -84,6 +90,8 @@ Examples (as they would appear in the review):
 [unstaged](vscode://oliviercado.deep-diff-links/diff?repo=my-app&left=staged&right=worktree&path=app/web/utils/hooks.ts)
 [index vs commit](vscode://oliviercado.deep-diff-links/diff?repo=my-app&left=fcaac3532&right=staged&path=app/web/utils/hooks.ts)
 [stash vs local](vscode://oliviercado.deep-diff-links/diff?repo=my-app&left=stash&right=worktree&path=app/web/utils/hooks.ts)
+[all files](vscode://oliviercado.deep-diff-links/diff?repo=my-app&left=fcaac3532&right=f756bcd28)
+[uncommitted, all files](vscode://oliviercado.deep-diff-links/diff?repo=my-app&left=HEAD&right=worktree)
 ```
 
 In a markdown URL, `{` and `}` in `stash@{n}` must be percent-encoded (`stash%40%7B1%7D` for `stash@{1}`). The URI handler receives the decoded token.
@@ -100,11 +108,11 @@ In a markdown URL, `{` and `}` in `stash@{n}` must be percent-encoded (`stash%40
 | `repo` | yes | Must match the **name of exactly one workspace folder** (`basename` of the repo root). Zero matches: error U8. Two or more: error U9. |
 | `left` | yes | A **side** (§5.1.1). |
 | `right` | yes | Same rules as `left`. |
-| `path` | yes | Repo-relative, forward slashes, no `..` segments, no leading `/`, no backslashes, no NUL. Same path for every kind of side. The name must be the name **in that side's tree** (after `git mv a.ts b.ts` that is staged but not committed, `staged` uses `b.ts` and `HEAD` still uses `a.ts`; a stash keeps the names from stash time). |
-| `line` | no | Positive integer. Applies to the right side. |
-| `lines` | no | **[v1.1]** Comma-separated ranges, each `<n>` or `<start>-<end>`, with positive integers and `start ≤ end`. Regex per range: `^[1-9][0-9]{0,8}(-[1-9][0-9]{0,8})?$`. At most 50 ranges. No spaces. Ranges may be in any order and may overlap; they are sorted and merged before use. |
+| `path` | no **[v1.3]** (yes in v1–v1.2) | When present: repo-relative, forward slashes, no `..` segments, no leading `/`, no backslashes, no NUL. Same path for every kind of side. The name must be the name **in that side's tree** (after `git mv a.ts b.ts` that is staged but not committed, `staged` uses `b.ts` and `HEAD` still uses `a.ts`; a stash keeps the names from stash time). **[v1.3]** When absent: multi-file diff (§6.4). Empty `path=` is still E1 (`path` is empty), not a multi-file link. |
+| `line` | no | Positive integer. Applies to the right side. Requires `path` (U25). |
+| `lines` | no | **[v1.1]** Comma-separated ranges, each `<n>` or `<start>-<end>`, with positive integers and `start ≤ end`. Regex per range: `^[1-9][0-9]{0,8}(-[1-9][0-9]{0,8})?$`. At most 50 ranges. No spaces. Ranges may be in any order and may overlap; they are sorted and merged before use. Requires `path` (U25). |
 
-`line` and `lines` may be combined. `line` sets the scroll position, and when it is absent, `lines` scrolls to the first selected block.
+`line` and `lines` may be combined. `line` sets the scroll position, and when it is absent, `lines` scrolls to the first selected block. They cannot appear on a multi-file link.
 
 Error U8: "No workspace folder named `<repo>`. Open the review's repository in VS Code."
 
@@ -151,11 +159,12 @@ Keywords cannot collide with SHAs (`HEAD`, `worktree`, `staged`, `stash` are not
 1. The URI handler parses and validates parameters (§5.1). On failure: show error, stop.
 2. Resolve the repository: the workspace folder whose basename equals `repo`. Obtain its `Repository` object from the built-in Git extension API.
 3. Resolve each side (§6.2). On failure: the matching U-error, stop.
-4. Build two URIs with a custom scheme, `deep-diff://` (§7.2). Each side is served by a `TextDocumentContentProvider`.
-5. Call `vscode.commands.executeCommand('vscode.diff', leftUri, rightUri, title, { preview: true, selection })`.
-6. If `line` is set, scroll the right side to that line (use `selection` in the options, or reveal after the editor opens).
+4. **[v1.3]** If `path` is absent: list differing paths (§6.4), then open the built-in multi-file diff. Stop here.
+5. Build two URIs with a custom scheme, `deep-diff://` (§7.2). Each side is served by a `TextDocumentContentProvider`.
+6. Call `vscode.commands.executeCommand('vscode.diff', leftUri, rightUri, title, { preview: true, selection })`.
+7. If `line` is set, scroll the right side to that line (use `selection` in the options, or reveal after the editor opens).
 
-Titles: `<path> (<leftLabel> ↔ <rightLabel>)`. A commit SHA is shown as 7 hex characters. Live tokens use `HEAD`, `worktree`, `staged`, and `stash@{n}` (`stash` displays as `stash@{0}`). **[v1.1]** With `lines`: append ` · lines 25-30, 120-160`, showing the ranges after merging.
+Titles with `path`: `<path> (<leftLabel> ↔ <rightLabel>)`. A commit SHA is shown as 7 hex characters. Live tokens use `HEAD`, `worktree`, `staged`, and `stash@{n}` (`stash` displays as `stash@{0}`). **[v1.1]** With `lines`: append ` · lines 25-30, 120-160`, showing the ranges after merging. **[v1.3]** Without `path`: `<leftLabel> ↔ <rightLabel>`.
 
 ### 6.1 [v1.1] Partial diff
 
@@ -199,6 +208,22 @@ While a live URI is open:
 
 Do not poll, and do not run git on a timer. If no live URI is open, do not watch. Re-resolve the live token on each `provideTextDocumentContent`; do not reuse a SHA captured at click time.
 
+### 6.4 [v1.3] Multi-file diff (no `path`)
+
+1. If `left` and `right` name the same side (same SHA after resolve, both `HEAD`, both `worktree`, both `staged`, or the same `stash@{n}`), the list is empty → U23.
+2. List paths with `git diff --name-only -z` (argument arrays only; `--end-of-options` before any token). Map the pair to git's forms:
+   - Two tree-ish sides (SHA, `HEAD`, `stash@{n}`): `git diff --name-only -z --end-of-options <left> <right>`.
+   - Tree-ish vs `staged`: `git diff --name-only -z --cached --end-of-options <tree>`.
+   - `staged` vs `worktree`: `git diff --name-only -z`.
+   - Tree-ish vs `worktree`: `git diff --name-only -z --end-of-options <tree>`.
+3. If either side is `worktree`, union `git ls-files -z --others --exclude-standard` (untracked, not ignored).
+4. If a side is `stash` / `stash@{n}` and `stash@{n}^3` exists, also diff that untracked tree against the other side (U22).
+5. Drop any path that fails §5.1 `path` validation. Sort the rest. Empty list → U23. Git failure → E2 ("Git failed listing files between `<left>` and `<right>`…").
+6. For each remaining path, build the same `deep-diff://` URIs as a single-file link and `watch` them. Call `_workbench.openMultiDiffEditor` with `{ title, resources: [{ originalUri, modifiedUri }, …] }`.
+7. Do not pre-read every file for U6 or `maxFileBytes`. Absent sides are empty documents; oversize / binary / submodule sides use the usual placeholders when a tab is opened.
+
+The path list is taken at click time. Live sides still refresh **content** of those URIs (G7). Paths that appear or disappear later are not added or removed until the link is clicked again.
+
 ## 7. Architecture
 
 ### 7.1 Components
@@ -208,9 +233,10 @@ Do not poll, and do not run git on a timer. If no live URI is open, do not watch
 | `UriHandler` | Entry point for `vscode://…/diff`. Parses params, validates, calls the opener. |
 | `Validator` | Pure functions for §5.1 rules. No VS Code imports, unit-testable. |
 | `RepoResolver` | Maps `repo` name → `Repository` from the built-in Git extension API. |
-| `GitReader` | Wraps git calls (`cat-file`, `rev-parse`, `show`). Uses `execFile` with argument arrays only. No shell. **[v1.2]** Also `rev-parse --verify --end-of-options` for `HEAD` and `stash@{n}`, index pathspecs, and `diff --no-index` for partial diffs that lack blob oids. |
+| `GitReader` | Wraps git calls (`cat-file`, `rev-parse`, `show`). Uses `execFile` with argument arrays only. No shell. **[v1.2]** Also `rev-parse --verify --end-of-options` for `HEAD` and `stash@{n}`, index pathspecs, and `diff --no-index` for partial diffs that lack blob oids. **[v1.3]** `diff --name-only -z` and `ls-files -z --others --exclude-standard`. |
 | `CommitContentProvider` | `TextDocumentContentProvider` for the `deep-diff://` scheme. Returns file content for a side, or empty string if the path is absent. **[v1.2]** Live sides re-read and emit `onDidChange`. |
-| `DiffOpener` | Builds URIs, calls `vscode.diff`, handles the line reveal. |
+| `DiffOpener` | Builds URIs, calls `vscode.diff`, handles the line reveal. **[v1.3]** Lists paths and calls `_workbench.openMultiDiffEditor`. |
+| `ChangedFiles` | **[v1.3]** Pure mapping of a side pair to `git diff --name-only` args, plus listing (untracked, `stash@{n}^3`). No VS Code imports, unit-testable. |
 | `LinkRewriter` | **[v1.1]** markdown-it plugin that rewrites this extension's link scheme to the running editor's (§5). Pure, unit-testable. |
 | `HunkSelector` | **[v1.1]** Pure functions. Parses `-U0` diff output into blocks, merges ranges, selects blocks (§5.2) and builds the synthetic side (§6.1). No VS Code imports, unit-testable. |
 
@@ -232,6 +258,7 @@ Do not poll, and do not run git on a timer. If no live URI is open, do not watch
 - Prefer the built-in Git extension API (`repo.show(ref, path)`, `repo.getCommit(ref)`) where it exists. Fall back to `execFile('git', args, { cwd })` only when the API lacks a method.
 - Never build a command string. Always pass arrays. Argument values come from validated input only.
 - **[v1.2]** `rev-parse` always includes `--verify --end-of-options`. The following argument is only a validated token (`HEAD^{commit}` or `stash@{n}^{commit}`).
+- **[v1.3]** `diff --name-only` tokens are only resolved sides (sha40, `HEAD`, `stash@{n}`, `stash@{n}^3`). Never a user-supplied ref.
 - Timeouts: 10 seconds per git call. Output cap: 10 MB per file.
 
 ## 8. Error handling
@@ -244,6 +271,7 @@ No error is silently swallowed. Every failure produces:
 |---|---|---|
 | U3 | Commit not in clone | "Commit `<sha>` not found in `<repo>`. Run `git fetch` and try again." |
 | U6 | Path absent from both sides | "`<path>` is not present on either side." |
+| U23 | **[v1.3]** Multi-file link, nothing differs | "No files differ between `<left>` and `<right>`." |
 | U8 | No matching workspace folder | "No workspace folder named `<repo>`. Open the review's repository in VS Code." |
 | U9 | More than one workspace folder matches | "More than one workspace folder is named `<repo>`. Rename or remove one, then try again." |
 | E1 | Invalid parameter | "Invalid link: `<param>` …" (names the parameter, not the value) |
@@ -253,7 +281,7 @@ No error is silently swallowed. Every failure produces:
 | U18 | **[v1.2]** Stash missing | "Stash `stash@{n}` not found in `<repo>`." |
 | U19 | **[v1.2]** `HEAD` missing | "`HEAD` not found in `<repo>`." |
 
-`lines` validation failures use E1, as in "Invalid link: `lines` …". Live-token validation failures use E1 on `left` or `right`.
+`lines` validation failures use E1, as in "Invalid link: `lines` …". Live-token validation failures use E1 on `left` or `right`. **[v1.3]** `line` or `lines` without `path` is E1 on that parameter (`cannot be used without path`). Listing failures use E2: "Git failed listing files between `<left>` and `<right>`. See the output channel."
 
 U6's message changed in v1.2 (was "is not in either commit"). SHA–SHA links use the new wording.
 
@@ -284,6 +312,7 @@ Unit tests (no VS Code runtime):
 - **[v1.1]** `Validator` for `lines`: single line, ranges, unordered and overlapping input, `0`, `5-3`, spaces, empty items (`1,,2`), trailing comma, 51 ranges.
 - **[v1.1]** `HunkSelector`: parsing `-U0` headers, including `+c` with no count and `-a,0`/`+c,0`; overlap rules for modifications, additions, and pure deletions at a range edge; a block that straddles a range is kept whole; synthetic left equals right when nothing is selected and equals the real left when everything is selected; ranges clipped past end of file; deleted-file mirror (§6.1).
 - **[v1.2]** `Validator` for sides: `HEAD`, `worktree`, `staged`, `stash`, `stash@{0}`, `stash@{99}` accepted; `head`, `HEAD~1`, `main`, `stash@{100}`, `stash@{01}`, `stash@{1.hour.ago}`, `stash^2` rejected. SHA rules unchanged.
+- **[v1.3]** `Validator`: omitted `path` is accepted; `line`/`lines` without `path` rejected. `ChangedFiles`: two-commit list, `HEAD`↔`worktree` includes untracked, stash includes `^3`, identical sides list nothing. `git diff --name-only` argument arrays.
 
 Integration tests (`@vscode/test-electron`), using a fixture repo with two known commits:
 - Link opens a diff with the expected title and both sides' content (U1, U2).
@@ -296,6 +325,7 @@ Integration tests (`@vscode/test-electron`), using a fixture repo with two known
 - **[v1.1]** Scheme: the preview renders foreign and own-scheme links with this editor's scheme. In the source editor, the link at the cursor targets this editor's scheme, and "Open Link" (`editor.action.openLink`, the click path) opens the diff. The click step runs under VS Code only, because Cursor's extension-test mode reloads the window when a `cursor://` link opens. Run the suite in Cursor with `CDL_EDITOR=/Applications/Cursor.app/Contents/MacOS/Cursor`.
 - **[v1.1]** Fixture with at least three separate change blocks: `lines` covering one block opens a diff whose left document differs from the right only in that block (U10). Ranges with no changes produce U11 and identical sides. Deleted file with `lines` (U12). Range past end of file (U13). The title includes the merged ranges.
 - **[v1.2]** Fixture with a dirty worktree, a staged change, and `stash@{0}`: U14–U17 open diffs with the expected titles and content. Missing stash → U18. SHA–SHA links still match v1 content and titles (7-character SHAs). Saving the worktree file updates an open `worktree` diff (U20). `lines` between `HEAD` and `worktree` still filters blocks. After opening a live diff, `git status --porcelain` is unchanged and no extra objects appear under `.git/objects`.
+- **[v1.3]** SHA–SHA without `path` opens a multi-file editor whose file list is exactly the paths that differ between those commits (U24). `HEAD`↔`worktree` without `path` includes untracked files. Identical sides → U23, no editor.
 
 Manual test: click the links in `review-fcaac3532..f756bcd28.md` in the markdown preview and confirm each opens the matching diff.
 
@@ -304,7 +334,7 @@ Manual test: click the links in `review-fcaac3532..f756bcd28.md` in the markdown
 - [ ] AC1. Every U-scenario in §4 behaves as listed.
 - [ ] AC2. No `git checkout`, `git stash`, or file write is performed in the user's repository. Temp files for `--no-index` are outside the clone and deleted.
 - [ ] AC3. A link with a shell metacharacter in any parameter is rejected with E1 and runs nothing.
-- [ ] AC4. The diff editor is the built-in one (`vscode.diff`), and the extension contributes no webview.
+- [ ] AC4. The diff editor is the built-in one (`vscode.diff` or **[v1.3]** `_workbench.openMultiDiffEditor`), and the extension contributes no webview.
 - [ ] AC5. All error paths in §8 show a notification and a log entry.
 - [ ] AC6. Unit and integration tests pass in CI on Linux, macOS and Windows.
 - [ ] AC7. The `.vsix` installs on a clean VS Code, and the links in the review open diffs with no setup beyond `vscode.git` being enabled.
@@ -313,6 +343,8 @@ Manual test: click the links in `review-fcaac3532..f756bcd28.md` in the markdown
 - [x] AC10. **[v1.2]** A SHA–SHA link is unchanged from v1.1 (title still uses 7-character SHAs, content and cache keys unchanged).
 - [x] AC11. **[v1.2]** Live sides re-read on `onDidChange`; an open `worktree` diff updates on save (U20).
 - [x] AC12. **[v1.2]** The worktree side is not a `file://` URI and is not editable.
+- [x] AC13. **[v1.3]** A link with `path` is unchanged from v1.2.
+- [x] AC14. **[v1.3]** A link without `path` opens the built-in multi-file diff of the differing paths (U24), or U23 when there are none.
 
 ## 13. Decisions
 
@@ -322,7 +354,7 @@ Resolved on review. These replace the earlier open questions.
 2. **Multi-root workspaces.** The `repo` parameter must match exactly one workspace folder by basename. If zero match, U8. If two or more match, U9 (below) and nothing opens.
 3. **Large diffs.** The default `deepDiffLinks.maxFileBytes` of 10 MB (§10) is accepted.
 4. **Remote commit fetch.** Out of scope. The extension stays offline (§9). The U3 message tells the user to run `git fetch`.
-5. **Link scope.** v1 is file-centric: one link opens one file's diff. Multi-file views for a commit pair are not in v1.
+5. **Link scope.** v1 is file-centric: one link opens one file's diff. Multi-file views for a commit pair are not in v1. **[v1.3]** Superseded by decision 22: omitting `path` is the multi-file link.
 
 Consequences for the sections above:
 - §5.1 `repo` rule: unique match required.
@@ -356,6 +388,14 @@ Consequences for the sections above:
 20. **No object-db writes.** Partial diffs that lack blob oids use `git diff --no-index` and temp files outside the clone.
 21. **Worktree matches `git diff`, not the editor buffer.** Clean filters / CRLF apply. Not `file://`, so the side is not editable (G4, non-goals).
 
+### 13.4 [v1.3] Multi-file diffs
+
+22. **Omit `path`, do not add a new route.** `/diff` without `path` is every differing file. A new `/files` path or a `paths=` parameter would split the link grammar for no gain.
+23. **Built-in multi-file editor.** `_workbench.openMultiDiffEditor`, not a custom tree or a concatenated patch. Each entry is the same `deep-diff://` pair a single-file link would open.
+24. **File list is a snapshot; content is live.** Re-listing on every git event would shuffle the editor under the reviewer. Paths already open still follow G7.
+25. **Untracked files belong on a `worktree` side.** `git diff` omits them; `ls-files --others --exclude-standard` is unioned in so HEAD↔worktree matches "everything not committed," including new files.
+26. **`line` / `lines` stay single-file.** Ranges have no meaning across files.
+
 ## 14. Milestones
 
 1. Validator and URI parsing, with unit tests.
@@ -367,3 +407,4 @@ Consequences for the sections above:
 7. **[v1.1]** Synthetic side in the content provider, partial titles, U11, and integration tests (U10–U13).
 8. **[v1.2]** Side tokens in the validator; `HEAD` / `staged` / `stash` / `worktree` reads in `GitReader`; live URIs; U14–U19, U21–U22.
 9. **[v1.2]** `onDidChange` for live sides (U20), `diff --no-index` for partial live diffs, AC10–AC12.
+10. **[v1.3]** Optional `path`; `ChangedFiles` listing; multi-file opener; U23–U25; AC13–AC14.

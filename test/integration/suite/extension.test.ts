@@ -450,6 +450,33 @@ describe('deep diff links (integration)', () => {
     });
   });
 
+  describe('multi-file (no path)', () => {
+    it('opens every file that differs between two commits', async () => {
+      const r = await api.handleUri(link({ repo: 'fixture', left: fx.c1.slice(0, 9), right: fx.c2.slice(0, 9) }));
+      assert.ok(r.ok, JSON.stringify(r));
+      assert.strictEqual(r.title, `${fx.c1.slice(0, 7)} ↔ ${fx.c2.slice(0, 7)}`);
+      assert.deepStrictEqual(r.files, ['added.txt', 'blocks.ts', 'deleted.txt', 'hooks.ts']);
+      assert.ok(tabCount() >= 1);
+    });
+
+    it('HEAD ↔ worktree includes untracked files', async () => {
+      const r = await api.handleUri(link({ repo: 'fixture', left: 'HEAD', right: 'worktree' }));
+      assert.ok(r.ok, JSON.stringify(r));
+      assert.strictEqual(r.title, 'HEAD ↔ worktree');
+      assert.ok(r.files?.includes('untracked.txt'));
+      assert.ok(r.files?.includes('hooks.ts'));
+    });
+
+    it('identical sides list no files', async () => {
+      const before = tabCount();
+      const r = await api.handleUri(link({ repo: 'fixture', left: 'worktree', right: 'worktree' }));
+      assert.ok(!r.ok);
+      assert.strictEqual(r.code, 'U23');
+      assert.strictEqual(r.message, 'No files differ between `worktree` and `worktree`.');
+      assert.strictEqual(tabCount(), before);
+    });
+  });
+
   it('AC4: no webview is contributed', () => {
     const pkg = vscode.extensions.getExtension('oliviercado.deep-diff-links')!.packageJSON;
     assert.strictEqual(pkg.contributes.customEditors, undefined);

@@ -1,7 +1,7 @@
 import { formatSideLabel } from './validator';
 
 /** Error codes from spec §8 (plus E4, see README). */
-export type ErrorCode = 'U3' | 'U6' | 'U8' | 'U9' | 'U18' | 'U19' | 'E1' | 'E2' | 'E3' | 'E4' | 'SIZE';
+export type ErrorCode = 'U3' | 'U6' | 'U8' | 'U9' | 'U18' | 'U19' | 'U23' | 'E1' | 'E2' | 'E3' | 'E4' | 'SIZE';
 
 /** A side-read failure that is not a generic git crash (symlink escape, missing HEAD/stash). */
 export class SideReadError extends Error {
@@ -36,6 +36,10 @@ export const messages = {
   commitNotFound: (sha: string, repo: string) =>
     `Commit \`${sha}\` not found in \`${repo}\`. Run \`git fetch\` and try again.`,
   pathInNeither: (path: string) => `\`${path}\` is not present on either side.`,
+  noFilesDiffer: (left: string, right: string) =>
+    `No files differ between \`${formatSideLabel(left)}\` and \`${formatSideLabel(right)}\`.`,
+  gitFailedList: (left: string, right: string) =>
+    `Git failed listing files between \`${formatSideLabel(left)}\` and \`${formatSideLabel(right)}\`. See the output channel.`,
   noFolder: (repo: string) =>
     `No workspace folder named \`${repo}\`. Open the review's repository in VS Code.`,
   manyFolders: (repo: string) =>

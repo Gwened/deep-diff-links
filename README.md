@@ -16,7 +16,7 @@ The debounce logic changed here: [hooks.ts:25-30,120-160](vscode://oliviercado.d
 
 Click the link, in the Markdown preview or in the source, and the built-in diff editor opens:
 
-- **It shows the change being discussed.** It opens that file between those two commits. With `lines`, only the change blocks in those lines are highlighted.
+- **It shows the change being discussed.** It opens that file between those two commits. With `lines`, only the change blocks in those lines are highlighted. Omit `path` to open every file that differs.
 - **It works from any branch.** Neither commit needs to be checked out. Target content using SHAs is read straight from git history. `HEAD`, `worktree`, `staged` and `stash` sides follow the repository as it is now.
 - **It leaves your work alone.** Nothing is checked out, stashed or written, so a dirty working tree is fine.
 - **Compatible with your editor.** The same link opens in VS Code and in Cursor.
@@ -35,7 +35,7 @@ It is not a replacement for GitLens or other general git tools, and it works alo
 ## Link format
 
 ```
-vscode://oliviercado.deep-diff-links/diff?repo=<folder>&left=<side>&right=<side>&path=<repo-relative-path>[&line=<n>][&lines=<ranges>]
+vscode://oliviercado.deep-diff-links/diff?repo=<folder>&left=<side>&right=<side>[&path=<repo-relative-path>][&line=<n>][&lines=<ranges>]
 ```
 
 ```markdown
@@ -43,15 +43,17 @@ vscode://oliviercado.deep-diff-links/diff?repo=<folder>&left=<side>&right=<side>
 [hooks.ts:25-30,120-160](vscode://oliviercado.deep-diff-links/diff?repo=my-app&left=fcaac3532&right=f756bcd28&path=app/web/utils/hooks.ts&lines=25-30,120-160)
 [uncommitted](vscode://oliviercado.deep-diff-links/diff?repo=my-app&left=HEAD&right=worktree&path=app/web/utils/hooks.ts)
 [unstaged](vscode://oliviercado.deep-diff-links/diff?repo=my-app&left=staged&right=worktree&path=app/web/utils/hooks.ts)
+[all files](vscode://oliviercado.deep-diff-links/diff?repo=my-app&left=fcaac3532&right=f756bcd28)
+[uncommitted, all files](vscode://oliviercado.deep-diff-links/diff?repo=my-app&left=HEAD&right=worktree)
 ```
 
 | Parameter | Rules |
 |---|---|
 | `repo` | Basename of exactly one open workspace folder. |
 | `left`, `right` | A **side**: lowercase hex commit SHA (7–40 characters), or `HEAD`, `worktree`, `staged`, `stash`, or `stash@{0}`–`stash@{99}`. Branches, tags and `HEAD~1` are rejected. Percent-encode `{` `}` in `stash@{n}` (`stash%40%7B1%7D`). |
-| `path` | Repo-relative, forward slashes. No `..`, `.`, leading `/`, backslashes, control characters, or `` ` $ ; \| & < > " ' * ? ! ``. Percent-encode spaces and non-ASCII characters. |
-| `line` | Optional positive integer; the right side opens with that line selected. |
-| `lines` | Optional ranges such as `25-30,120-160` (right-side line numbers). Gives a **partial diff**: only the changes touching those lines are highlighted. Without it you get the full diff. |
+| `path` | Optional. When set: repo-relative, forward slashes. No `..`, `.`, leading `/`, backslashes, control characters, or `` ` $ ; \| & < > " ' * ? ! ``. Percent-encode spaces and non-ASCII characters. When omitted: **multi-file diff** of every path that differs. |
+| `line` | Optional positive integer; the right side opens with that line selected. Requires `path`. |
+| `lines` | Optional ranges such as `25-30,120-160` (right-side line numbers). Gives a **partial diff**: only the changes touching those lines are highlighted. Without it you get the full diff. Requires `path`. |
 
 ### Partial diffs (`lines`)
 
@@ -60,6 +62,13 @@ vscode://oliviercado.deep-diff-links/diff?repo=<folder>&left=<side>&right=<side>
 - For an added or deleted file, ranges pick individual lines. For a deleted file, line numbers refer to the old file.
 - If nothing changed in the ranges, the diff still opens at the first range and you get an info message.
 - Turn on `diffEditor.hideUnchangedRegions.enabled` to fold everything outside the selected blocks.
+
+### Multi-file diffs (no `path`)
+
+- The built-in multi-file diff opens, titled `fcaac35 ↔ f756bcd` or `HEAD ↔ worktree`.
+- A `worktree` side includes untracked files. A `stash` side includes untracked files from `git stash -u`.
+- The file list is taken at click time. Content of those files still updates while the diff stays open; new or removed paths need another click.
+- `line` and `lines` cannot be used without `path`.
 
 ### Live sides (`HEAD`, `worktree`, `staged`, `stash`)
 
@@ -104,6 +113,7 @@ Every failure shows a notification and writes a line to the **Deep Diff Links** 
 |---|---|
 | U3 | A commit isn't in the clone |
 | U6 | The path isn't present on either side |
+| U23 | A multi-file link, and no files differ |
 | U11 | Info only: no changes in the requested `lines` |
 | U18 | That stash isn't in the repository |
 | U19 | `HEAD` can't be resolved (unborn branch) |
@@ -136,8 +146,9 @@ The link address is the extension id, `<publisher>.<name>` from `package.json`. 
 | `src/repoResolver.ts` | `repo` → workspace folder → repository root, via the Git extension API |
 | `src/contentProvider.ts` | `deep-diff://` scheme; SHA cache; live sides emit `onDidChange` |
 | `src/hunkSelector.ts` | Partial diffs: `-U0` block parsing, selection, synthetic side |
+| `src/changedFiles.ts` | Multi-file links: which paths differ between two sides |
 | `src/linkRewriter.ts` | Rewrites links to the running editor's scheme, in the preview (markdown-it plugin) and the source editor (link provider) |
-| `src/diffOpener.ts` | Reads both sides, checks U6 and size, then calls `vscode.diff` |
+| `src/diffOpener.ts` | Reads both sides, checks U6 and size, then calls `vscode.diff` or the multi-file editor |
 | `src/uriHandler.ts` | Entry point; turns every failure into a notification and a log line |
 
 ## License

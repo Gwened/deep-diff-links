@@ -1,7 +1,9 @@
 import * as vscode from 'vscode';
+import { listChangedFiles } from './changedFiles';
 import { CommitContentProvider, PartialRef, SideRef, toUri } from './contentProvider';
 import { LinkError, SideReadError, messages } from './errors';
 import { FileSide } from './fileAtCommit';
+import { GitReader } from './gitReader';
 import { PartialPlan } from './hunkSelector';
 import { LineRange, formatRanges, formatSideLabel } from './validator';
 
@@ -12,7 +14,7 @@ export interface DiffRequest {
   /** `deep-diff://` authority: sha40 or live token. */
   left: string;
   right: string;
-  path: string;
+  path?: string;
   line?: number;
   ranges?: LineRange[];
 }
@@ -21,6 +23,8 @@ export interface DiffOpened {
   title: string;
   leftUri: vscode.Uri;
   rightUri: vscode.Uri;
+  /** Set when the link had no `path`: every file that differs. */
+  files?: string[];
   /** [v1.1] Set when the diff opened with an informational notice (U11). */
   notice?: { code: 'U11'; message: string };
 }
@@ -59,6 +63,7 @@ export class DiffOpener {
 
   /** Reads both sides (validating U6 and size), then opens the built-in diff editor. */
   async open(req: DiffRequest): Promise<DiffOpened> {
+    if (req.path === undefined) return this.openMulti(req);
     const leftRef: SideRef = { root: req.root, gitPath: req.gitPath, side: req.left, path: req.path };
     const rightRef: SideRef = { ...leftRef, side: req.right };
     const [left, right] = await Promise.all([
@@ -107,6 +112,37 @@ export class DiffOpener {
       return { title, leftUri, rightUri, notice: { code: 'U11', message } };
     }
     return { title, leftUri, rightUri };
+  }
+
+  /**
+   * Opens the built-in multi-file diff for every path that differs between the sides.
+   * `line` / `lines` are rejected earlier (no path to apply them to).
+   */
+  private async openMulti(req: DiffRequest): Promise<DiffOpened> {
+    const reader = new GitReader(req.gitPath);
+    let files: string[];
+    try {
+      files = await listChangedFiles(reader, req.root, req.left, req.right);
+    } catch (error) {
+      if (error instanceof LinkError) throw error;
+      throw new LinkError('E2', messages.gitFailedList(req.left, req.right), error);
+    }
+    if (files.length === 0) {
+      throw new LinkError('U23', messages.noFilesDiffer(req.left, req.right));
+    }
+
+    const resources = files.map((path) => {
+      const leftUri = toUri({ root: req.root, gitPath: req.gitPath, side: req.left, path });
+      const rightUri = toUri({ root: req.root, gitPath: req.gitPath, side: req.right, path });
+      this.provider.watch(leftUri);
+      this.provider.watch(rightUri);
+      return { originalUri: leftUri, modifiedUri: rightUri };
+    });
+
+    const title = `${formatSideLabel(req.left)} ↔ ${formatSideLabel(req.right)}`;
+    await vscode.commands.executeCommand('_workbench.openMultiDiffEditor', { title, resources });
+    const first = resources[0];
+    return { title, leftUri: first.originalUri, rightUri: first.modifiedUri, files };
   }
 }
 

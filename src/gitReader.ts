@@ -113,6 +113,17 @@ export const diffNoIndexArgs = (leftFile: string, rightFile: string): string[] =
   rightFile,
 ];
 export const revParseVerifyArgs = (spec: string): string[] => ['rev-parse', '--verify', '--end-of-options', spec];
+/** NUL-separated paths that differ. Callers append the side tokens after `--end-of-options`. */
+export const NAME_ONLY_FLAGS = ['diff', '--name-only', '-z'] as const;
+export const untrackedArgs = (): string[] => ['ls-files', '-z', '--others', '--exclude-standard'];
+
+export function parseNulPaths(stdout: Buffer): string[] {
+  if (stdout.length === 0) return [];
+  return stdout
+    .toString('utf8')
+    .split('\0')
+    .filter((p) => p.length > 0);
+}
 export const hashObjectArgs = (relPath: string): string[] => ['hash-object', '-w', `--path=${relPath}`, '--stdin'];
 /** Object name for "this SHA, peeled to a commit". */
 export const commitSpec = (sha: string): string => `${sha}^{commit}`;
@@ -256,5 +267,17 @@ export class GitReader {
   async showToplevel(cwd: string): Promise<string> {
     const { stdout } = await this.run(cwd, showToplevelArgs(), SMALL_OUTPUT);
     return stdout.toString('utf8').trim();
+  }
+
+  /** `git diff --name-only -z …`. Exit 1 (sides differ) is success. */
+  async nameOnly(root: string, args: string[]): Promise<string[]> {
+    const { stdout } = await this.runDiff(root, args, SMALL_OUTPUT);
+    return parseNulPaths(stdout);
+  }
+
+  /** Untracked, not ignored, repo-relative paths. */
+  async listUntracked(root: string): Promise<string[]> {
+    const { stdout } = await this.run(root, untrackedArgs(), SMALL_OUTPUT);
+    return parseNulPaths(stdout);
   }
 }

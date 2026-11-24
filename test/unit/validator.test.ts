@@ -88,11 +88,23 @@ describe('validator', () => {
   });
 
   it('reports the first missing parameter', () => {
-    for (const p of ['repo', 'left', 'right', 'path']) {
+    for (const p of ['repo', 'left', 'right']) {
       const o: Record<string, string> = { ...base };
       delete o[p];
       rejects(o, p);
     }
+  });
+
+  it('omitted path is a multi-file link', () => {
+    const { path: _path, ...rest } = base;
+    const r = validateParams(entries(rest));
+    assert.ok(r.ok && r.params.path === undefined);
+  });
+
+  it('rejects line and lines without path', () => {
+    const { path: _path, ...rest } = base;
+    rejects({ ...rest, line: '1' }, 'line');
+    rejects({ ...rest, lines: '1-2' }, 'lines');
   });
 
   it('rejects duplicated parameters', () => {

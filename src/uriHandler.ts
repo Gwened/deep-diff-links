@@ -46,7 +46,7 @@ export class DeepDiffUriHandler implements vscode.UriHandler {
     if (!v.ok) throw new LinkError('E1', messages.invalid(v.param, v.reason));
     const p = v.params;
     this.log.info(
-      `Opening ${p.repo}:${p.path} ${p.left}..${p.right}${p.line ? ` line ${p.line}` : ''}${p.ranges ? ` lines ${formatRanges(p.ranges)}` : ''}`,
+      `Opening ${p.repo}:${p.path ?? '*'} ${p.left}..${p.right}${p.line ? ` line ${p.line}` : ''}${p.ranges ? ` lines ${formatRanges(p.ranges)}` : ''}`,
     );
 
     const { root, gitPath } = await resolveRepo(p.repo);
