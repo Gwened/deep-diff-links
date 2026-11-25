@@ -20,7 +20,8 @@ import {
 } from '../../fixtureRepo';
 
 const fx: Fixture = JSON.parse(process.env.CDL_FIXTURE!);
-const AUTHORITY = 'oliviercado.deep-diff-links';
+const AUTHORITY = 'netismic.difflinks';
+const LEGACY_AUTHORITY = 'oliviercado.deep-diff-links';
 
 function link(params: Record<string, string>, route = '/diff'): vscode.Uri {
   const query = Object.entries(params)
@@ -45,7 +46,7 @@ describe('deep diff links (integration)', () => {
   let api: DeepDiffLinksApi;
 
   before(async () => {
-    const ext = vscode.extensions.getExtension<DeepDiffLinksApi>(`oliviercado.deep-diff-links`);
+    const ext = vscode.extensions.getExtension<DeepDiffLinksApi>(AUTHORITY);
     assert.ok(ext, 'extension is installed');
     api = await ext.activate();
   });
@@ -325,6 +326,7 @@ describe('deep diff links (integration)', () => {
     const md = [
       `[a](cursor://${AUTHORITY}/diff?repo=fixture&left=abcdef0&right=abcdef1&path=a.ts)`,
       `[b](vscode://${AUTHORITY}/diff?repo=fixture&left=abcdef0&right=abcdef1&path=b.ts)`,
+      `[old](vscode://${LEGACY_AUTHORITY}/diff?repo=fixture&left=abcdef0&right=abcdef1&path=c.ts)`,
       `[c](cursor://other.extension/x)`,
     ].join('\n\n');
     const html = await vscode.commands.executeCommand<string>('markdown.api.render', md);
@@ -335,6 +337,7 @@ describe('deep diff links (integration)', () => {
     assert.deepStrictEqual(hrefs, [
       `${own}://${AUTHORITY}/diff?repo=fixture&left=abcdef0&right=abcdef1&path=a.ts`,
       `${own}://${AUTHORITY}/diff?repo=fixture&left=abcdef0&right=abcdef1&path=b.ts`,
+      `${own}://${AUTHORITY}/diff?repo=fixture&left=abcdef0&right=abcdef1&path=c.ts`,
       'cursor://other.extension/x',
     ]);
   });
@@ -478,7 +481,7 @@ describe('deep diff links (integration)', () => {
   });
 
   it('AC4: no webview is contributed', () => {
-    const pkg = vscode.extensions.getExtension('oliviercado.deep-diff-links')!.packageJSON;
+    const pkg = vscode.extensions.getExtension(AUTHORITY)!.packageJSON;
     assert.strictEqual(pkg.contributes.customEditors, undefined);
     assert.strictEqual(pkg.contributes.views, undefined);
   });

@@ -4,7 +4,7 @@ Written for: the engineer who will build this extension, and the reviewer who wi
 
 **Status:** v1, v1.1 (partial diffs and automatic editor scheme), **[v1.2]** live sides (`HEAD`, `worktree`, `staged`, `stash`), and **[v1.3]** multi-file diffs (omit `path`) implemented.
 **Spec vs app version:** `v1` / `v1.1` / `v1.2` / `v1.3` are feature slices in this document, not the extension semver (`package.json`).
-**Name:** Deep Diff Links, extension id `oliviercado.deep-diff-links` (renamed from Commit Diff Links; see decisions 13 and 14).
+**Name:** Deep Diff Links, extension id `netismic.difflinks` (see decisions 13, 14 and 27).
 
 ---
 
@@ -76,7 +76,7 @@ A SHA–SHA link with `path` behaves exactly as in v1 / v1.1 (U1–U13).
 A link is a `vscode://` URI, which VS Code routes to the extension's URI handler. This works in the markdown preview without enabling command trust.
 
 ```
-vscode://oliviercado.deep-diff-links/diff?repo=<repo-name>&left=<side>&right=<side>[&path=<repo-relative-path>][&line=<n>][&lines=<ranges>]
+vscode://netismic.difflinks/diff?repo=<repo-name>&left=<side>&right=<side>[&path=<repo-relative-path>][&line=<n>][&lines=<ranges>]
 ```
 
 `<side>` is a commit SHA or a **[v1.2]** live token (§5.1). With `path`, `left` / `right` choose which copy of that file to show. **[v1.3]** Without `path`, the link is every file that differs between those sides.
@@ -84,14 +84,14 @@ vscode://oliviercado.deep-diff-links/diff?repo=<repo-name>&left=<side>&right=<si
 Examples (as they would appear in the review):
 
 ```markdown
-[hooks.ts:80](vscode://oliviercado.deep-diff-links/diff?repo=my-app&left=fcaac3532&right=f756bcd28&path=app/web/utils/hooks.ts&line=80)
-[hooks.ts:25-30,120-160](vscode://oliviercado.deep-diff-links/diff?repo=my-app&left=fcaac3532&right=f756bcd28&path=app/web/utils/hooks.ts&lines=25-30,120-160)
-[uncommitted](vscode://oliviercado.deep-diff-links/diff?repo=my-app&left=HEAD&right=worktree&path=app/web/utils/hooks.ts)
-[unstaged](vscode://oliviercado.deep-diff-links/diff?repo=my-app&left=staged&right=worktree&path=app/web/utils/hooks.ts)
-[index vs commit](vscode://oliviercado.deep-diff-links/diff?repo=my-app&left=fcaac3532&right=staged&path=app/web/utils/hooks.ts)
-[stash vs local](vscode://oliviercado.deep-diff-links/diff?repo=my-app&left=stash&right=worktree&path=app/web/utils/hooks.ts)
-[all files](vscode://oliviercado.deep-diff-links/diff?repo=my-app&left=fcaac3532&right=f756bcd28)
-[uncommitted, all files](vscode://oliviercado.deep-diff-links/diff?repo=my-app&left=HEAD&right=worktree)
+[hooks.ts:80](vscode://netismic.difflinks/diff?repo=my-app&left=fcaac3532&right=f756bcd28&path=app/web/utils/hooks.ts&line=80)
+[hooks.ts:25-30,120-160](vscode://netismic.difflinks/diff?repo=my-app&left=fcaac3532&right=f756bcd28&path=app/web/utils/hooks.ts&lines=25-30,120-160)
+[uncommitted](vscode://netismic.difflinks/diff?repo=my-app&left=HEAD&right=worktree&path=app/web/utils/hooks.ts)
+[unstaged](vscode://netismic.difflinks/diff?repo=my-app&left=staged&right=worktree&path=app/web/utils/hooks.ts)
+[index vs commit](vscode://netismic.difflinks/diff?repo=my-app&left=fcaac3532&right=staged&path=app/web/utils/hooks.ts)
+[stash vs local](vscode://netismic.difflinks/diff?repo=my-app&left=stash&right=worktree&path=app/web/utils/hooks.ts)
+[all files](vscode://netismic.difflinks/diff?repo=my-app&left=fcaac3532&right=f756bcd28)
+[uncommitted, all files](vscode://netismic.difflinks/diff?repo=my-app&left=HEAD&right=worktree)
 ```
 
 In a markdown URL, `{` and `}` in `stash@{n}` must be percent-encoded (`stash%40%7B1%7D` for `stash@{1}`). The URI handler receives the decoded token.
@@ -376,7 +376,7 @@ Consequences for the sections above:
 
 13. **Renamed to Deep Diff Links.** The extension id, link address, setting key (`deepDiffLinks.maxFileBytes`), output channel and internal scheme (`deep-diff://`) all changed. A display-name-only rename would have left `commit-diff-links` in every link. At the time, links using the former id were rewritten to the new one in Markdown (§5). That support was later dropped (decision 14).
 
-14. **Publisher `oliviercado` (0.4.0).** The extension id is `oliviercado.deep-diff-links`. The source repository is https://github.com/Gwened/deep-diff-links. Former ids are no longer rewritten, so links must use the current id. The rewriting mechanism stays (`LEGACY_IDS` in `src/extension.ts`, empty) in case the id changes again.
+14. **Publisher `oliviercado` (0.4.0).** The extension id became `oliviercado.deep-diff-links`. The source repository is https://github.com/Gwened/deep-diff-links. Former ids were not rewritten at that time. The rewriting mechanism stayed (`LEGACY_IDS` in `src/extension.ts`). Superseded by decision 27.
 
 ### 13.3 [v1.2] Live sides
 
@@ -395,6 +395,10 @@ Consequences for the sections above:
 24. **File list is a snapshot; content is live.** Re-listing on every git event would shuffle the editor under the reviewer. Paths already open still follow G7.
 25. **Untracked files belong on a `worktree` side.** `git diff` omits them; `ls-files --others --exclude-standard` is unioned in so HEAD↔worktree matches "everything not committed," including new files.
 26. **`line` / `lines` stay single-file.** Ranges have no meaning across files.
+
+### 13.5 Publisher `netismic` (0.6.0)
+
+27. **Id is `netismic.difflinks`.** Marketplace `name` is unique across publishers, so `deep-diff-links` could not move with the publisher. Display name stays Deep Diff Links. `oliviercado.deep-diff-links` is in `LEGACY_IDS` so old Markdown links still open after this extension is installed. Browser/OS clicks of the old `vscode://` authority do not.
 
 ## 14. Milestones
 

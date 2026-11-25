@@ -11,7 +11,7 @@ Turn Markdown code-review comments into clickable, contextual Git diffs. Jump di
 A review written in Markdown points at the exact change it's talking about:
 
 ```markdown
-The debounce logic changed here: [hooks.ts:25-30,120-160](cursor://oliviercado.deep-diff-links/diff?repo=my-app&left=fcaac3532&right=f756bcd28&path=app/web/utils/hooks.ts&lines=25-30,120-160)
+The debounce logic changed here: [hooks.ts:25-30,120-160](cursor://netismic.difflinks/diff?repo=my-app&left=fcaac3532&right=f756bcd28&path=app/web/utils/hooks.ts&lines=25-30,120-160)
 ```
 
 Click the link, in the Markdown preview or in the source, and the built-in diff editor opens:
@@ -34,16 +34,16 @@ It is not a replacement for GitLens or other general git tools, and it works alo
 ## Link format
 
 ```
-cursor://oliviercado.deep-diff-links/diff?repo=<folder>&left=<side>&right=<side>[&path=<repo-relative-path>][&line=<n>][&lines=<ranges>]
+cursor://netismic.difflinks/diff?repo=<folder>&left=<side>&right=<side>[&path=<repo-relative-path>][&line=<n>][&lines=<ranges>]
 ```
 
 `vscode://` links with the same path and query work too. The extension rewrites either scheme to the editor you are in.
 
 ```markdown
-[hooks.ts:80](cursor://oliviercado.deep-diff-links/diff?repo=my-app&left=fcaac3532&right=f756bcd28&path=app/web/utils/hooks.ts&line=80)
-[hooks.ts:25-30,120-160](cursor://oliviercado.deep-diff-links/diff?repo=my-app&left=fcaac3532&right=f756bcd28&path=app/web/utils/hooks.ts&lines=25-30,120-160)
-[uncommitted](cursor://oliviercado.deep-diff-links/diff?repo=my-app&left=HEAD&right=worktree&path=app/web/utils/hooks.ts)
-[all files](cursor://oliviercado.deep-diff-links/diff?repo=my-app&left=fcaac3532&right=f756bcd28)
+[hooks.ts:80](cursor://netismic.difflinks/diff?repo=my-app&left=fcaac3532&right=f756bcd28&path=app/web/utils/hooks.ts&line=80)
+[hooks.ts:25-30,120-160](cursor://netismic.difflinks/diff?repo=my-app&left=fcaac3532&right=f756bcd28&path=app/web/utils/hooks.ts&lines=25-30,120-160)
+[uncommitted](cursor://netismic.difflinks/diff?repo=my-app&left=HEAD&right=worktree&path=app/web/utils/hooks.ts)
+[all files](cursor://netismic.difflinks/diff?repo=my-app&left=fcaac3532&right=f756bcd28)
 ```
 
 | Parameter | Rules |
@@ -86,8 +86,10 @@ If a commit isn't in your clone, run `git fetch` and click again. The extension 
 Install from the Extensions view in Cursor, or:
 
 ```sh
-cursor --install-extension oliviercado.deep-diff-links
+cursor --install-extension netismic.difflinks
 ```
+
+If you installed `oliviercado.deep-diff-links`, uninstall it. Links that still use `cursor://oliviercado.deep-diff-links/…` (or `vscode://`) open from Markdown once this extension is installed. Write new links with `cursor://netismic.difflinks/…`.
 
 You need the built-in Git extension enabled, and a trusted workspace.
 

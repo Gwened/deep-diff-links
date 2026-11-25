@@ -1,7 +1,7 @@
 import * as assert from 'assert';
 import { findForeignLinks, rewriteHref } from '../../src/linkRewriter';
 
-const A = 'oliviercado.deep-diff-links';
+const A = 'netismic.difflinks';
 const Q = '/diff?repo=r&left=abcdef0&right=abcdef1&path=a.ts&lines=1-2,5';
 
 describe('linkRewriter', () => {
@@ -12,7 +12,7 @@ describe('linkRewriter', () => {
     assert.strictEqual(rewriteHref(`cursor://${A}${Q}`, A, 'vscode'), `vscode://${A}${Q}`);
   });
   it('matches the extension id case-insensitively', () => {
-    assert.strictEqual(rewriteHref(`vscode://OlivierCado.Deep-Diff-Links${Q}`, A, 'cursor'), `cursor://OlivierCado.Deep-Diff-Links${Q}`);
+    assert.strictEqual(rewriteHref(`vscode://Netismic.DiffLinks${Q}`, A, 'cursor'), `cursor://Netismic.DiffLinks${Q}`);
   });
   it('leaves other extensions, web links and relative links alone', () => {
     for (const href of [`vscode://other.ext${Q}`, `https://${A}${Q}`, `file://${A}/x`, './review.md', '#section', `vscode://${A}.evil${Q}`]) {
@@ -60,6 +60,10 @@ describe('legacy authorities (former ids)', () => {
   });
   it('is ignored when not declared', () => {
     assert.strictEqual(rewriteHref(`vscode://${OLD}${Q}`, A, 'vscode'), `vscode://${OLD}${Q}`);
+  });
+  it('rewrites oliviercado.deep-diff-links to the current id', () => {
+    const old = 'oliviercado.deep-diff-links';
+    assert.strictEqual(rewriteHref(`vscode://${old}${Q}`, A, 'vscode', [old]), `vscode://${A}${Q}`);
   });
   it('source-editor links include own-scheme legacy links', () => {
     const links = findForeignLinks(`[a](vscode://${OLD}${Q}) [b](vscode://${A}${Q})`, A, 'vscode', [OLD]);

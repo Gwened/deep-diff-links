@@ -2,6 +2,12 @@
 
 All notable changes to Deep Diff Links are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow [Semantic Versioning](https://semver.org/).
 
+## [0.6.0] - 2026-11-25
+
+### Changed
+- **Extension ID is now `netismic.difflinks`.** Links start with `vscode://netismic.difflinks/diff?…` (or `cursor://`). Uninstall `oliviercado.deep-diff-links` and install this listing; they do not auto-update across publishers.
+- Markdown links that still use `oliviercado.deep-diff-links` are rewritten to the new id in the preview and the source editor.
+
 ## [0.5.0] - 2026-11-24
 
 ### Added
@@ -60,6 +66,7 @@ All notable changes to Deep Diff Links are listed here. The format follows [Keep
 - Clear error messages for a missing commit, a missing path, an unknown or ambiguous workspace folder, git failures, and a disabled Git extension.
 - Placeholder text for binary files, submodules and directories, and a size limit (`maxFileBytes`).
 
+[0.6.0]: https://github.com/Gwened/deep-diff-links/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/Gwened/deep-diff-links/compare/v0.4.1...v0.5.0
 [0.4.1]: https://github.com/Gwened/deep-diff-links/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/Gwened/deep-diff-links/compare/v0.3.1...v0.4.0

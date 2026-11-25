@@ -30,7 +30,7 @@ async function main() {
     fs.mkdirSync(path.join(userData, 'User'), { recursive: true });
     fs.writeFileSync(
       path.join(userData, 'User', 'settings.json'),
-      JSON.stringify({ 'extensions.confirmedUriHandlerExtensionIds': ['oliviercado.deep-diff-links'] }),
+      JSON.stringify({ 'extensions.confirmedUriHandlerExtensionIds': ['netismic.difflinks'] }),
     );
 
     // CDL_EDITOR=/Applications/Cursor.app/Contents/MacOS/Cursor runs the suite in Cursor instead of VS Code.

@@ -9,7 +9,7 @@ const DEFAULT_MAX_BYTES = 10 * 1024 * 1024;
  * Former extension ids. Links using them are rewritten to the current id in Markdown.
  * Add an entry here if the publisher or name ever changes. Empty: no former ids are supported.
  */
-const LEGACY_IDS: string[] = [];
+const LEGACY_IDS: string[] = ['oliviercado.deep-diff-links'];
 
 /** Returned from activate. `handleUri` is for integration tests; `extendMarkdownIt` is for the markdown preview. */
 export interface DeepDiffLinksApi {

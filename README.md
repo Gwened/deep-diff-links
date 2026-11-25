@@ -11,7 +11,7 @@ Turn Markdown code-review comments into clickable, contextual Git diffs. Jump di
 A review written in Markdown points at the exact change it's talking about:
 
 ```markdown
-The debounce logic changed here: [hooks.ts:25-30,120-160](vscode://oliviercado.deep-diff-links/diff?repo=my-app&left=fcaac3532&right=f756bcd28&path=app/web/utils/hooks.ts&lines=25-30,120-160)
+The debounce logic changed here: [hooks.ts:25-30,120-160](vscode://netismic.difflinks/diff?repo=my-app&left=fcaac3532&right=f756bcd28&path=app/web/utils/hooks.ts&lines=25-30,120-160)
 ```
 
 Click the link, in the Markdown preview or in the source, and the built-in diff editor opens:
@@ -35,16 +35,16 @@ It is not a replacement for GitLens or other general git tools, and it works alo
 ## Link format
 
 ```
-vscode://oliviercado.deep-diff-links/diff?repo=<folder>&left=<side>&right=<side>[&path=<repo-relative-path>][&line=<n>][&lines=<ranges>]
+vscode://netismic.difflinks/diff?repo=<folder>&left=<side>&right=<side>[&path=<repo-relative-path>][&line=<n>][&lines=<ranges>]
 ```
 
 ```markdown
-[hooks.ts:80](vscode://oliviercado.deep-diff-links/diff?repo=my-app&left=fcaac3532&right=f756bcd28&path=app/web/utils/hooks.ts&line=80)
-[hooks.ts:25-30,120-160](vscode://oliviercado.deep-diff-links/diff?repo=my-app&left=fcaac3532&right=f756bcd28&path=app/web/utils/hooks.ts&lines=25-30,120-160)
-[uncommitted](vscode://oliviercado.deep-diff-links/diff?repo=my-app&left=HEAD&right=worktree&path=app/web/utils/hooks.ts)
-[unstaged](vscode://oliviercado.deep-diff-links/diff?repo=my-app&left=staged&right=worktree&path=app/web/utils/hooks.ts)
-[all files](vscode://oliviercado.deep-diff-links/diff?repo=my-app&left=fcaac3532&right=f756bcd28)
-[uncommitted, all files](vscode://oliviercado.deep-diff-links/diff?repo=my-app&left=HEAD&right=worktree)
+[hooks.ts:80](vscode://netismic.difflinks/diff?repo=my-app&left=fcaac3532&right=f756bcd28&path=app/web/utils/hooks.ts&line=80)
+[hooks.ts:25-30,120-160](vscode://netismic.difflinks/diff?repo=my-app&left=fcaac3532&right=f756bcd28&path=app/web/utils/hooks.ts&lines=25-30,120-160)
+[uncommitted](vscode://netismic.difflinks/diff?repo=my-app&left=HEAD&right=worktree&path=app/web/utils/hooks.ts)
+[unstaged](vscode://netismic.difflinks/diff?repo=my-app&left=staged&right=worktree&path=app/web/utils/hooks.ts)
+[all files](vscode://netismic.difflinks/diff?repo=my-app&left=fcaac3532&right=f756bcd28)
+[uncommitted, all files](vscode://netismic.difflinks/diff?repo=my-app&left=HEAD&right=worktree)
 ```
 
 | Parameter | Rules |
@@ -85,14 +85,16 @@ The first time you click a link, VS Code asks whether to let the extension open 
 
 If a commit isn't in your clone, run `git fetch` and click again. The extension never touches the network.
 
+The extension id used to be `oliviercado.deep-diff-links`. With this extension installed, those links still open from Markdown (preview and Cmd/Ctrl-click). Write new links with `netismic.difflinks`. Uninstall the old extension if you still have it.
+
 ## Install
 
 ```sh
 npm ci
-npm run package:vscode        # deep-diff-links-<version>-vscode.vsix    (Visual Studio Marketplace)
-npm run package:openvsx       # deep-diff-links-<version>-openvsx.vsix   (Open VSX)
-code --install-extension deep-diff-links-0.5.0-vscode.vsix
-cursor --install-extension deep-diff-links-0.5.0-openvsx.vsix
+npm run package:vscode        # difflinks-<version>-vscode.vsix    (Visual Studio Marketplace)
+npm run package:openvsx       # difflinks-<version>-openvsx.vsix   (Open VSX)
+code --install-extension difflinks-0.6.0-vscode.vsix
+cursor --install-extension difflinks-0.6.0-openvsx.vsix
 ```
 
 Store listings are `docs/readme-vscode-marketplace.md` and `docs/readme-open-vsx.md`. This GitHub README is not packed into either VSIX.
@@ -134,7 +136,7 @@ CDL_EDITOR=/Applications/Cursor.app/Contents/MacOS/Cursor node out/test/integrat
 CDL_GREP='source editor' npm run test:integration                                               # run a subset
 ```
 
-The link address is the extension id, `<publisher>.<name>` from `package.json`. If either changes, add the old id to `LEGACY_IDS` in `src/extension.ts` so old links keep working from Markdown.
+The link address is the extension id, `<publisher>.<name>` from `package.json` (`netismic.difflinks`). Former id `oliviercado.deep-diff-links` is in `LEGACY_IDS` in `src/extension.ts` so old Markdown links still work.
 
 ### Layout
 

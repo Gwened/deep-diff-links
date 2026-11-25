@@ -1,9 +1,9 @@
 {
-  "name": "deep-diff-links",
+  "name": "difflinks",
   "displayName": "Deep Diff Links",
   "description": "Deep-linkable code review viewer: turn Markdown review comments into clickable Git diffs, from any branch, without touching your working tree.",
-  "publisher": "oliviercado",
-  "version": "0.5.0",
+  "publisher": "netismic",
+  "version": "0.6.0",
   "private": true,
   "license": "MIT",
   "author": {
@@ -63,8 +63,8 @@
     "test:unit": "npm run build:tests && mocha \"out/test/unit/**/*.test.js\"",
     "test:integration": "npm run compile && npm run build:tests && node out/test/integration/runTest.js",
     "test": "npm run test:unit && npm run test:integration",
-    "package:vscode": "vsce package --no-dependencies --readme-path docs/readme-vscode-marketplace.md --changelog-path docs/changelog-vscode-marketplace.md --out deep-diff-links-$npm_package_version-vscode.vsix",
-    "package:openvsx": "vsce package --no-dependencies --readme-path docs/readme-open-vsx.md --ignoreFile .vscodeignore.openvsx --out deep-diff-links-$npm_package_version-openvsx.vsix",
+    "package:vscode": "vsce package --no-dependencies --readme-path docs/readme-vscode-marketplace.md --changelog-path docs/changelog-vscode-marketplace.md --out difflinks-$npm_package_version-vscode.vsix",
+    "package:openvsx": "vsce package --no-dependencies --readme-path docs/readme-open-vsx.md --ignoreFile .vscodeignore.openvsx --out difflinks-$npm_package_version-openvsx.vsix",
     "package": "npm run package:vscode && npm run package:openvsx",
     "vscode:prepublish": "npm run compile -- --production"
   },
